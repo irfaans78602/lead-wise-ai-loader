@@ -5,7 +5,9 @@ Registry of entity types the loader knows how to write.
 Each EntitySpec describes:
   - name:         JSON key the entity lives under
   - table:        Postgres table to write
-  - pk_col:       primary key column
+  - pk_col:       primary key column, or — for tables whose real PK is
+                  an IDENTITY the loader never sees — the UNIQUE column
+                  used as the row identity across runs
   - pk_kind:      string tag passed to uuid_gen.derive()
   - natural_key:  tuple of PG column names that identify the logical
                   entity (NOT the version PK). For unversioned tables
@@ -60,6 +62,31 @@ CLIENTS = EntitySpec(
         "pilot_ends_on": "pilot_ends_on",
         "closed_behavior": "closed_behavior",
         "reopen_policy": "reopen_policy",
+        "start_date": "start_date",
+        "end_date": "end_date",
+    },
+)
+
+
+# client_users.client_user_id is IDENTITY — the loader never sees it.
+# google_sub is UNIQUE and stable across runs, so it is used as the row
+# identity. Everything downstream (preflight, diff, write) keys off
+# spec.pk_col, so no other module needs to know about the trick.
+#
+# client_id is deliberately absent from `columns`: it is populated only
+# when the JSON supplies a `client_key`, and the schema allows it to be
+# NULL until an operator links the user to a client manually.
+CLIENT_USERS = EntitySpec(
+    name="client_users",
+    table="client_users",
+    pk_col="google_sub",
+    pk_kind="client_user",
+    natural_key=("google_sub",),
+    columns={
+        "email": "email",
+        "display_name": "display_name",
+        "role": "role",
+        "deactivation_reason": "deactivation_reason",
         "start_date": "start_date",
         "end_date": "end_date",
     },
@@ -221,6 +248,7 @@ ALL = {
     spec.name: spec
     for spec in (
         CLIENTS,
+        CLIENT_USERS,
         CLIENT_WHATSAPPS,
         ADS,
         CLIENT_MESSAGES,

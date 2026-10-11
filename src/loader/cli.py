@@ -2,8 +2,8 @@
 cli.py
 Command-line entry point. Two families of subcommand:
 
-    load <input.json> [--commit]      load per-client JSON
-    db {drop|create|seed|rebuild}     manage the schema
+    load <input.json> [--commit] [--seed]   load per-client JSON
+    db {drop|create|seed|rebuild}           manage the schema
 
 `load` is the default — if the first argument isn't `db` or `load`,
 it's treated as the input path. So both of these work:
@@ -14,6 +14,10 @@ it's treated as the input path. So both of these work:
 Without --commit, a load runs in preview mode: the transaction is
 opened, writes are performed, state is read back, and the whole thing
 is rolled back. Nothing is committed.
+
+--seed flips the default `require` from "existing" to "new". An
+explicit "new": true or "new": false in the JSON still wins. Use
+--seed for the first load into an empty database.
 
 Exit codes:
     0  clean preview, or successful commit
@@ -85,6 +89,9 @@ def _build_parser() -> argparse.ArgumentParser:
     load.add_argument("input", help="path to JSON, relative to data_root")
     load.add_argument("--commit", action="store_true",
                       help="apply the transaction instead of rolling back")
+    load.add_argument("--seed", action="store_true",
+                      help="default require='new' for entities that don't "
+                           "say; use for the first load into an empty DB")
     load.add_argument("--data-root", default=None)
     load.add_argument("--schema-root", default=None)
 
@@ -126,10 +133,12 @@ def _run_db(cfg, args) -> int:
 
 def _run_load(cfg, args) -> int:
     mode = "commit" if args.commit else "preview"
+    default_require = "new" if args.seed else "existing"
 
     # 1. Read plan
     try:
-        plan = load_plan(args.input, cfg.data_root)
+        plan = load_plan(args.input, cfg.data_root,
+                         default_require=default_require)
     except FileError as e:
         print(f"file error: {e}", file=sys.stderr)
         return 2
@@ -141,11 +150,13 @@ def _run_load(cfg, args) -> int:
         log.header(
             input_path=args.input,
             database_url=cfg.database_url,
-            schema_version=None,   # filled in after connect
+            schema_version=None,   # filled after connect
             expected_schema_version=EXPECTED_SCHEMA_VERSION,
             loader_version=__version__,
             file_sha256=file_hash(str(input_path)),
         )
+        if args.seed:
+            log.line(f"seed mode: default require = new")
     except OSError as e:
         print(f"log error: {e}", file=sys.stderr)
         log.close()
@@ -170,8 +181,7 @@ def _run_load(cfg, args) -> int:
             _print_log_path(log.path)
             return 1
 
-        # 5. Snapshot pre-state (inside the implicit transaction that
-        #    write.execute() will later commit or roll back).
+        # 5. Snapshot pre-state
         pre = diff_mod.read_state(conn, plan)
 
         # 6. Transaction
@@ -219,10 +229,6 @@ def _run_load(cfg, args) -> int:
 # ---------------------------------------------------------------------
 
 def _count_changes(pre: dict, post: dict) -> dict:
-    """
-    Compare two snapshots keyed by {table: {row_id: row}}. Returns
-    {table: {inserted, updated, unchanged, extra}}.
-    """
     counts = {}
     tables = set(pre) | set(post)
 

@@ -6,8 +6,14 @@ file. The file is the artifact; stdout is a three-line glance.
 Log path:
     {data_root}/logs/{client_slug}/{YYYY-MM-DD-HHMMSS}-{mode}.log
 
-The client slug is the folder immediately under clients/ in the input
-path. If the input path doesn't match that shape, slug is "unknown".
+Client slug resolution, in order:
+  1. .client-slug next to the input JSON — a one-line file whose
+     contents are the slug. Use this when the folder name and the
+     slug should differ (e.g. "LeadWiseAI" folder, "leadwise-platform"
+     slug).
+  2. First path segment of the input path — the folder name itself.
+     Use this when the folder name is already a valid slug.
+  3. "unknown" — the input file sits at data_root with no subfolder.
 """
 
 import os
@@ -16,18 +22,45 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
+# Legacy clients/<slug>/ pattern, kept as a secondary fallback for
+# repos that still use it.
 CLIENT_PATH_RE = re.compile(r"(?:^|/)clients/([^/]+)/")
 
 
-def client_slug(input_path: str) -> str:
-    m = CLIENT_PATH_RE.search(input_path.replace(os.sep, "/"))
-    return m.group(1) if m else "unknown"
+def client_slug(data_root: str, input_path: str) -> str:
+    """
+    Resolve the slug used for the log directory name.
+
+    See the module docstring for the resolution order.
+    """
+    json_path = Path(input_path)
+
+    # 1. .client-slug next to the input file.
+    slug_file = Path(data_root) / json_path.parent / ".client-slug"
+    if slug_file.exists():
+        content = slug_file.read_text(encoding="utf-8").strip()
+        if content:
+            return content
+
+    # 2. Legacy clients/<slug>/ pattern anywhere in the path.
+    normalized = input_path.replace(os.sep, "/")
+    m = CLIENT_PATH_RE.search(normalized)
+    if m:
+        return m.group(1)
+
+    # 3. First path segment, if the file lives in a subfolder.
+    parts = normalized.strip("/").split("/")
+    if len(parts) >= 2:
+        return parts[0]
+
+    # 4. Nothing to derive from.
+    return "unknown"
 
 
 class RunLog:
     def __init__(self, data_root: str, input_path: str, mode: str):
         self.mode = mode
-        slug = client_slug(input_path)
+        slug = client_slug(data_root, input_path)
         ts = datetime.now(timezone.utc).strftime("%Y-%m-%d-%H%M%S")
         log_dir = Path(data_root) / "logs" / slug
         log_dir.mkdir(parents=True, exist_ok=True)
@@ -66,9 +99,9 @@ class RunLog:
         {table: {row_identity: row_dict}}.
 
         For each table, print:
-          INSERT    <identity>       — present in post, absent in pre
-          UPDATE    <identity>       — present in both, columns differ
-          UNCHANGED <identity>       — present in both, columns same
+          INSERT    <identity>       present in post, absent in pre
+          UPDATE    <identity>       present in both, columns differ
+          UNCHANGED <identity>       present in both, columns same
         """
         self._fh.write(f"--- changes ---   {self._elapsed()}\n\n")
 

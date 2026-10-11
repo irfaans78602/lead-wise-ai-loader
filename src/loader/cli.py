@@ -5,7 +5,7 @@ Command-line entry point. Two families of subcommand:
     load <input.json> [--commit] [--seed]   load per-client JSON
     db {drop|create|seed|rebuild}           manage the schema
 
-`load` is the default — if the first argument isn't `db` or `load`,
+`load` is the default â€” if the first argument isn't `db` or `load`,
 it's treated as the input path. So both of these work:
 
     loader clients/leadwise-ai/60-instance.json
@@ -283,7 +283,7 @@ def _print_summary(counts: dict, mode: str, log_path, schema_version):
         print(f"warning:   schema_version={schema_version} "
               f"expected={EXPECTED_SCHEMA_VERSION}")
     if mode == "preview":
-        print("preview only — re-run with --commit to apply")
+        print("preview only â€” re-run with --commit to apply")
     else:
         print("committed")
     print(f"log:       {log_path}")

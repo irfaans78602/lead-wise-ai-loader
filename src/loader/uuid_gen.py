@@ -7,7 +7,7 @@ the same natural key, the same UUID is derived. This is what makes
 re-running a load idempotent: the second run derives the same PKs, so
 it either updates existing rows or is a no-op.
 
-The namespace is fixed. Never change it — changing it changes every
+The namespace is fixed. Never change it â€” changing it changes every
 UUID in every database that was built with this loader.
 """
 

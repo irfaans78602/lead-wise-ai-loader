@@ -7,7 +7,7 @@ Called twice per run:
   - after write.execute(), to read the projected post-state
 
 The two snapshots drive the insert/update/unchanged counts and the
-per-column before→after diff in the log. Same implementation, two
+per-column beforeâ†’after diff in the log. Same implementation, two
 call sites.
 """
 

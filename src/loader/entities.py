@@ -5,8 +5,8 @@ Registry of entity types the loader knows how to write.
 Each EntitySpec describes:
   - name:         JSON key the entity lives under
   - table:        Postgres table to write
-  - pk_col:       primary key column, or — for tables whose real PK is
-                  an IDENTITY the loader never sees — the UNIQUE column
+  - pk_col:       primary key column, or â€” for tables whose real PK is
+                  an IDENTITY the loader never sees â€” the UNIQUE column
                   used as the row identity across runs
   - pk_kind:      string tag passed to uuid_gen.derive()
   - natural_key:  tuple of PG column names that identify the logical
@@ -68,7 +68,7 @@ CLIENTS = EntitySpec(
 )
 
 
-# client_users.client_user_id is IDENTITY — the loader never sees it.
+# client_users.client_user_id is IDENTITY â€” the loader never sees it.
 # google_sub is UNIQUE and stable across runs, so it is used as the row
 # identity. Everything downstream (preflight, diff, write) keys off
 # spec.pk_col, so no other module needs to know about the trick.
@@ -129,7 +129,7 @@ ADS = EntitySpec(
 
 
 # ---------------------------------------------------------------------
-# Versioned content — root-ad-owned
+# Versioned content â€” root-ad-owned
 # ---------------------------------------------------------------------
 
 CLIENT_MESSAGES = EntitySpec(

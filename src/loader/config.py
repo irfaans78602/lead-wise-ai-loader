@@ -4,14 +4,14 @@ Reads and validates configuration from environment and CLI.
 
 Loads a .env file, in this order of precedence:
 
-  1. $LW_ENV_FILE, if set — an explicit path, for tests and CI.
-  2. <loader_repo_root>/.env — the canonical location. The loader's
+  1. $LW_ENV_FILE, if set -- an explicit path, for tests and CI.
+  2. <loader_repo_root>/.env -- the canonical location. The loader's
      own config lives with the loader, regardless of which directory
      you run it from.
-  3. Nearest .env walking up from cwd — a fallback for operators who
+  3. Nearest .env walking up from cwd -- a fallback for operators who
      prefer per-project config.
 
-Real environment variables always win over .env — this is a
+Real environment variables always win over .env -- this is a
 convenience, not a source of truth.
 """
 
@@ -49,7 +49,7 @@ def _load_dotenv():
             _parse_dotenv(p)
             return
 
-    # 2. The loader's own .env — preferred.
+    # 2. The loader's own .env -- preferred.
     repo_env = _loader_repo_root() / _DOTENV_NAME
     if repo_env.is_file():
         _parse_dotenv(repo_env)

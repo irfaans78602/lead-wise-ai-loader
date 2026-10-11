@@ -7,13 +7,13 @@ Log path:
     {data_root}/logs/{client_slug}/{YYYY-MM-DD-HHMMSS}-{mode}.log
 
 Client slug resolution, in order:
-  1. .client-slug next to the input JSON — a one-line file whose
+  1. .client-slug next to the input JSON â€” a one-line file whose
      contents are the slug. Use this when the folder name and the
      slug should differ (e.g. "LeadWiseAI" folder, "leadwise-platform"
      slug).
-  2. First path segment of the input path — the folder name itself.
+  2. First path segment of the input path â€” the folder name itself.
      Use this when the folder name is already a valid slug.
-  3. "unknown" — the input file sits at data_root with no subfolder.
+  3. "unknown" â€” the input file sits at data_root with no subfolder.
 """
 
 import os

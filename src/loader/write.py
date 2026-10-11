@@ -52,7 +52,7 @@ def _write_versioned(conn, op: PlanOp):
 
     # Find any current version with a different PK (i.e. different
     # start_date). If none, this is either a first insert or an in-place
-    # edit of the current version — no close needed.
+    # edit of the current version â€” no close needed.
     with conn.cursor() as cur:
         cur.execute(
             f"""SELECT {spec.pk_col} FROM {spec.table}

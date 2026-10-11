@@ -1,7 +1,7 @@
 """
 conn.py
 Psycopg2 connection helper. Uses RealDictCursor so rows come back
-as dicts — the write/diff layers read columns by name.
+as dicts â€” the write/diff layers read columns by name.
 """
 
 import psycopg2

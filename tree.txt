@@ -1,0 +1,33 @@
+Folder PATH listing
+Volume serial number is 008A-B41B
+C:.
+³   .dockerignore
+³   .gitignore
+³   Dockerfile
+³   pyproject.toml
+³   README.md
+³   requirements.txt
+³   tree.txt
+³   
+ÃÄÄÄsrc
+³   ÀÄÄÄloader
+³           cli.py
+³           config.py
+³           conn.py
+³           diff.py
+³           entities.py
+³           errors.py
+³           log.py
+³           plan.py
+³           preflight.py
+³           schema.py
+³           uuid_gen.py
+³           write.py
+³           __init__.py
+³           __main__.py
+³           
+ÀÄÄÄtests
+        conftest.py
+        test_plan.py
+        test_uuid_gen.py
+        

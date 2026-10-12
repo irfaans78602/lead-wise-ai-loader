@@ -17,6 +17,18 @@ C:.
 ³   ÃÄÄÄInclude
 ³   ÃÄÄÄLib
 ³   ³   ÀÄÄÄsite-packages
+³   ³       ³   __editable__.lead_wise_ai_loader-0.2.0.pth
+³   ³       ³   
+³   ³       ÃÄÄÄlead_wise_ai_loader-0.2.0.dist-info
+³   ³       ³       direct_url.json
+³   ³       ³       entry_points.txt
+³   ³       ³       INSTALLER
+³   ³       ³       METADATA
+³   ³       ³       RECORD
+³   ³       ³       REQUESTED
+³   ³       ³       top_level.txt
+³   ³       ³       WHEEL
+³   ³       ³       
 ³   ³       ÃÄÄÄpip
 ³   ³       ³   ³   py.typed
 ³   ³       ³   ³   __init__.py
@@ -1079,83 +1091,128 @@ C:.
 ³   ³       ³           __main__.cpython-314.pyc
 ³   ³       ³           __pip-runner__.cpython-314.pyc
 ³   ³       ³           
-³   ³       ÀÄÄÄpip-26.2.1.dist-info
-³   ³           ³   entry_points.txt
-³   ³           ³   INSTALLER
-³   ³           ³   METADATA
-³   ³           ³   RECORD
-³   ³           ³   REQUESTED
-³   ³           ³   WHEEL
-³   ³           ³   
-³   ³           ÀÄÄÄlicenses
-³   ³               ³   AUTHORS.txt
-³   ³               ³   LICENSE.txt
-³   ³               ³   
-³   ³               ÀÄÄÄsrc
-³   ³                   ÀÄÄÄpip
-³   ³                       ÀÄÄÄ_vendor
-³   ³                           ÃÄÄÄcachecontrol
-³   ³                           ³       LICENSE.txt
-³   ³                           ³       
-³   ³                           ÃÄÄÄcertifi
-³   ³                           ³       LICENSE
-³   ³                           ³       
-³   ³                           ÃÄÄÄdistlib
-³   ³                           ³       LICENSE.txt
-³   ³                           ³       
-³   ³                           ÃÄÄÄdistro
-³   ³                           ³       LICENSE
-³   ³                           ³       
-³   ³                           ÃÄÄÄidna
-³   ³                           ³       LICENSE.md
-³   ³                           ³       
-³   ³                           ÃÄÄÄmsgpack
-³   ³                           ³       COPYING
-³   ³                           ³       
-³   ³                           ÃÄÄÄpackaging
-³   ³                           ³       LICENSE
-³   ³                           ³       LICENSE.APACHE
-³   ³                           ³       LICENSE.BSD
-³   ³                           ³       
-³   ³                           ÃÄÄÄpkg_resources
-³   ³                           ³       LICENSE
-³   ³                           ³       
-³   ³                           ÃÄÄÄplatformdirs
-³   ³                           ³       LICENSE
-³   ³                           ³       
-³   ³                           ÃÄÄÄpygments
-³   ³                           ³       LICENSE
-³   ³                           ³       
-³   ³                           ÃÄÄÄpyproject_hooks
-³   ³                           ³       LICENSE
-³   ³                           ³       
-³   ³                           ÃÄÄÄrequests
-³   ³                           ³       LICENSE
-³   ³                           ³       
-³   ³                           ÃÄÄÄresolvelib
-³   ³                           ³       LICENSE
-³   ³                           ³       
-³   ³                           ÃÄÄÄrich
-³   ³                           ³       LICENSE
-³   ³                           ³       
-³   ³                           ÃÄÄÄtomli
-³   ³                           ³       LICENSE
-³   ³                           ³       
-³   ³                           ÃÄÄÄtomli_w
-³   ³                           ³       LICENSE
-³   ³                           ³       
-³   ³                           ÃÄÄÄtruststore
-³   ³                           ³       LICENSE
-³   ³                           ³       
-³   ³                           ÀÄÄÄurllib3
-³   ³                                   LICENSE.txt
-³   ³                                   
+³   ³       ÃÄÄÄpip-26.2.1.dist-info
+³   ³       ³   ³   entry_points.txt
+³   ³       ³   ³   INSTALLER
+³   ³       ³   ³   METADATA
+³   ³       ³   ³   RECORD
+³   ³       ³   ³   REQUESTED
+³   ³       ³   ³   WHEEL
+³   ³       ³   ³   
+³   ³       ³   ÀÄÄÄlicenses
+³   ³       ³       ³   AUTHORS.txt
+³   ³       ³       ³   LICENSE.txt
+³   ³       ³       ³   
+³   ³       ³       ÀÄÄÄsrc
+³   ³       ³           ÀÄÄÄpip
+³   ³       ³               ÀÄÄÄ_vendor
+³   ³       ³                   ÃÄÄÄcachecontrol
+³   ³       ³                   ³       LICENSE.txt
+³   ³       ³                   ³       
+³   ³       ³                   ÃÄÄÄcertifi
+³   ³       ³                   ³       LICENSE
+³   ³       ³                   ³       
+³   ³       ³                   ÃÄÄÄdistlib
+³   ³       ³                   ³       LICENSE.txt
+³   ³       ³                   ³       
+³   ³       ³                   ÃÄÄÄdistro
+³   ³       ³                   ³       LICENSE
+³   ³       ³                   ³       
+³   ³       ³                   ÃÄÄÄidna
+³   ³       ³                   ³       LICENSE.md
+³   ³       ³                   ³       
+³   ³       ³                   ÃÄÄÄmsgpack
+³   ³       ³                   ³       COPYING
+³   ³       ³                   ³       
+³   ³       ³                   ÃÄÄÄpackaging
+³   ³       ³                   ³       LICENSE
+³   ³       ³                   ³       LICENSE.APACHE
+³   ³       ³                   ³       LICENSE.BSD
+³   ³       ³                   ³       
+³   ³       ³                   ÃÄÄÄpkg_resources
+³   ³       ³                   ³       LICENSE
+³   ³       ³                   ³       
+³   ³       ³                   ÃÄÄÄplatformdirs
+³   ³       ³                   ³       LICENSE
+³   ³       ³                   ³       
+³   ³       ³                   ÃÄÄÄpygments
+³   ³       ³                   ³       LICENSE
+³   ³       ³                   ³       
+³   ³       ³                   ÃÄÄÄpyproject_hooks
+³   ³       ³                   ³       LICENSE
+³   ³       ³                   ³       
+³   ³       ³                   ÃÄÄÄrequests
+³   ³       ³                   ³       LICENSE
+³   ³       ³                   ³       
+³   ³       ³                   ÃÄÄÄresolvelib
+³   ³       ³                   ³       LICENSE
+³   ³       ³                   ³       
+³   ³       ³                   ÃÄÄÄrich
+³   ³       ³                   ³       LICENSE
+³   ³       ³                   ³       
+³   ³       ³                   ÃÄÄÄtomli
+³   ³       ³                   ³       LICENSE
+³   ³       ³                   ³       
+³   ³       ³                   ÃÄÄÄtomli_w
+³   ³       ³                   ³       LICENSE
+³   ³       ³                   ³       
+³   ³       ³                   ÃÄÄÄtruststore
+³   ³       ³                   ³       LICENSE
+³   ³       ³                   ³       
+³   ³       ³                   ÀÄÄÄurllib3
+³   ³       ³                           LICENSE.txt
+³   ³       ³                           
+³   ³       ÃÄÄÄpsycopg2
+³   ³       ³   ³   errorcodes.py
+³   ³       ³   ³   errors.py
+³   ³       ³   ³   extensions.py
+³   ³       ³   ³   extras.py
+³   ³       ³   ³   pool.py
+³   ³       ³   ³   sql.py
+³   ³       ³   ³   tz.py
+³   ³       ³   ³   _ipaddress.py
+³   ³       ³   ³   _json.py
+³   ³       ³   ³   _psycopg.cp314-win_amd64.pyd
+³   ³       ³   ³   _range.py
+³   ³       ³   ³   __init__.py
+³   ³       ³   ³   
+³   ³       ³   ÀÄÄÄ__pycache__
+³   ³       ³           errorcodes.cpython-314.pyc
+³   ³       ³           errors.cpython-314.pyc
+³   ³       ³           extensions.cpython-314.pyc
+³   ³       ³           extras.cpython-314.pyc
+³   ³       ³           pool.cpython-314.pyc
+³   ³       ³           sql.cpython-314.pyc
+³   ³       ³           tz.cpython-314.pyc
+³   ³       ³           _ipaddress.cpython-314.pyc
+³   ³       ³           _json.cpython-314.pyc
+³   ³       ³           _range.cpython-314.pyc
+³   ³       ³           __init__.cpython-314.pyc
+³   ³       ³           
+³   ³       ÃÄÄÄpsycopg2_binary-2.9.13.dist-info
+³   ³       ³   ³   DELVEWHEEL
+³   ³       ³   ³   INSTALLER
+³   ³       ³   ³   METADATA
+³   ³       ³   ³   RECORD
+³   ³       ³   ³   top_level.txt
+³   ³       ³   ³   WHEEL
+³   ³       ³   ³   
+³   ³       ³   ÀÄÄÄlicenses
+³   ³       ³           LICENSE
+³   ³       ³           
+³   ³       ÀÄÄÄpsycopg2_binary.libs
+³   ³               libcrypto-3-x64-eddd5cd0ea085eb2a059fda9439cd528.dll
+³   ³               libpq-e0ccaa8f7d8bab81a6c4523e5b9836f7.dll
+³   ³               libssl-3-x64-32894a46d81a567da6ad8a3a2d30bb70.dll
+³   ³               
 ³   ÀÄÄÄScripts
 ³           activate
 ³           activate.bat
 ³           activate.fish
 ³           Activate.ps1
 ³           deactivate.bat
+³           leadwise-loader.exe
+³           loader.exe
 ³           pip.exe
 ³           pip3.14.exe
 ³           pip3.exe
@@ -1163,22 +1220,45 @@ C:.
 ³           pythonw.exe
 ³           
 ÃÄÄÄsrc
+³   ÃÄÄÄlead_wise_ai_loader.egg-info
+³   ³       dependency_links.txt
+³   ³       entry_points.txt
+³   ³       PKG-INFO
+³   ³       requires.txt
+³   ³       SOURCES.txt
+³   ³       top_level.txt
+³   ³       
 ³   ÀÄÄÄloader
-³           cli.py
-³           config.py
-³           conn.py
-³           diff.py
-³           entities.py
-³           errors.py
-³           log.py
-³           plan.py
-³           preflight.py
-³           schema.py
-³           uuid_gen.py
-³           write.py
-³           __init__.py
-³           __main__.py
-³           
+³       ³   cli.py
+³       ³   config.py
+³       ³   conn.py
+³       ³   diff.py
+³       ³   entities.py
+³       ³   errors.py
+³       ³   log.py
+³       ³   plan.py
+³       ³   preflight.py
+³       ³   schema.py
+³       ³   uuid_gen.py
+³       ³   write.py
+³       ³   __init__.py
+³       ³   __main__.py
+³       ³   
+³       ÀÄÄÄ__pycache__
+³               cli.cpython-314.pyc
+³               config.cpython-314.pyc
+³               conn.cpython-314.pyc
+³               diff.cpython-314.pyc
+³               entities.cpython-314.pyc
+³               errors.cpython-314.pyc
+³               log.cpython-314.pyc
+³               plan.cpython-314.pyc
+³               preflight.cpython-314.pyc
+³               schema.cpython-314.pyc
+³               uuid_gen.cpython-314.pyc
+³               write.cpython-314.pyc
+³               __init__.cpython-314.pyc
+³               
 ÀÄÄÄtests
         conftest.py
         test_plan.py

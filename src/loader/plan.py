@@ -22,9 +22,18 @@ A file that carries only ad / matrix / pricing data can reference a
 client that was loaded from a *different* file by name. Because client
 UUIDs are deterministic (`derive("client", client_key)`), the loader
 computes the same UUID the earlier file wrote. If the client was never
-loaded, the FK on ads.client_id fails at write time â€” preflight cannot
+loaded, the FK on ads.client_id fails at write time — preflight cannot
 detect this because it has no way to know which file the client came
 from.
+
+Encoding
+--------
+Input JSON is read as UTF-8. Message text, question text and option
+labels carry per-locale strings (ar / fr / es / zh / …), so the file
+is never ASCII-only. On Windows, Path.read_text() defaults to the
+system locale codec (cp1252 on most English installs), which cannot
+decode Arabic; the explicit encoding="utf-8" here is required, not
+cosmetic.
 """
 
 import json
@@ -64,14 +73,19 @@ def load_plan(json_path: str, data_root: str,
     """
     default_require is applied when the JSON neither sets "new": true
     nor "new": false. Caller picks "new" for seed runs, "existing" for
-    updates. Default is "existing" â€” the safe choice.
+    updates. Default is "existing" — the safe choice.
     """
     path = Path(data_root) / json_path
     if not path.exists():
         raise FileError(f"input file not found: {path}")
 
     try:
-        payload = json.loads(path.read_text())
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except UnicodeDecodeError as e:
+        raise FileError(
+            f"input file is not valid UTF-8: {path} ({e}); "
+            f"re-save it as UTF-8"
+        ) from e
     except json.JSONDecodeError as e:
         raise FileError(f"invalid JSON in {path}: {e}") from e
 
@@ -121,7 +135,7 @@ def _resolve_client_ref(plan: Plan, client_key: str):
     """
     Return the client_id for client_key. If the client was planned in
     this same file, use that. Otherwise derive the UUID a prior load
-    of 10-clients.json would have produced â€” the derivation is
+    of 10-clients.json would have produced — the derivation is
     deterministic, so both runs agree.
     """
     client_id = plan.refs.get(("client", client_key))
@@ -386,7 +400,7 @@ def _plan_ad(ad: dict, client_id, plan: Plan, source: str,
         # reuse_ad_id is an FK to an already-planned ad. The root is
         # planned earlier in the same file, so its own PlanOp carries
         # the correct require. Leaves inherit their require from the
-        # JSON (or the CLI default) â€” do NOT override to "existing"
+        # JSON (or the CLI default) — do NOT override to "existing"
         # here, or fresh seeds fail.
 
     plan.add(PlanOp(

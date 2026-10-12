@@ -17,6 +17,14 @@ qualification_score, client_messages) carry a two-step update:
   2. Upsert the new version by its PK. Re-runs are idempotent: the
      first run closes the old and inserts the new; the second run
      finds nothing to close and updates the row in place.
+
+JSONB serialisation
+-------------------
+Nested dicts and lists (message_text, question_text, options, …) are
+serialised with ensure_ascii=False so non-ASCII text lands in the DB
+as real UTF-8 rather than \\uXXXX escapes. Both forms are valid JSON
+and both round-trip through json.loads, but the human-readable form is
+what shows up in a SQL client. PG stores either form identically.
 """
 
 import json
@@ -52,7 +60,7 @@ def _write_versioned(conn, op: PlanOp):
 
     # Find any current version with a different PK (i.e. different
     # start_date). If none, this is either a first insert or an in-place
-    # edit of the current version â€” no close needed.
+    # edit of the current version — no close needed.
     with conn.cursor() as cur:
         cur.execute(
             f"""SELECT {spec.pk_col} FROM {spec.table}
@@ -147,5 +155,5 @@ def _upsert_pricing_discount(conn, op: PlanOp):
 
 def _serialize(v):
     if isinstance(v, (dict, list)):
-        return json.dumps(v)
+        return json.dumps(v, ensure_ascii=False)
     return v

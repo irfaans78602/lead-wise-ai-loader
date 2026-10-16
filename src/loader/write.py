@@ -6,6 +6,17 @@ final verb: preview calls ROLLBACK, commit calls COMMIT.
 All writes go through a single `execute` function so preview and
 commit are guaranteed to run the same code path.
 
+Progress output
+---------------
+Ops are grouped by spec.table and executed group by group. Each group
+prints a header before its first op and a per-table count on
+completion. Every op prints a single line showing its logical key and
+— where meaningful — a short entity-specific hint (question_id and
+type for FAQs, level_code and score range for score bands, etc.).
+
+Failures print the table name and the failing op's logical key so it's
+obvious which component broke.
+
 Versioned tables (faqs, ad_confirmations, ad_reopen_prompts,
 qualification_score, client_messages) carry a two-step update:
 
@@ -28,14 +39,110 @@ what shows up in a SQL client. PG stores either form identically.
 """
 
 import json
+import sys
+from collections import OrderedDict
 from datetime import date, timedelta
 
 from loader.plan import Plan, PlanOp
 
 
 def execute(conn, plan: Plan):
+    """
+    Execute every op in plan.ops, grouped by spec.table in plan order.
+
+    Groups are formed by first-seen order of spec.table across the
+    plan, which is deterministic: plan.py walks the JSON in a fixed
+    order (clients → client_users → root_ad → ad_matrix → pricing),
+    and each entity type maps to one table.
+    """
+    groups: "OrderedDict[str, list[PlanOp]]" = OrderedDict()
     for op in plan.ops:
-        _write_one(conn, op)
+        groups.setdefault(op.spec.table, []).append(op)
+
+    for table, ops in groups.items():
+        print(f"  writing {table} ({len(ops)})...", flush=True)
+        done = 0
+        for op in ops:
+            _print_op(op, table)
+            try:
+                _write_one(conn, op)
+            except Exception as e:
+                print(
+                    f"    {table}: FAILED on {_fmt_op(op)}: {e}",
+                    file=sys.stderr, flush=True,
+                )
+                raise
+            done += 1
+        print(f"    {table}: {done} ok", flush=True)
+
+
+def _print_op(op: PlanOp, table: str):
+    """One line per op: logical key + entity-specific hint."""
+    key = ":".join(str(k) for k in op.logical_key)
+    hint = _hint(op)
+    pad = " " * (len(table) + 6)
+    if hint:
+        print(f"    {table}[{key}]{pad}{hint}", flush=True)
+    else:
+        print(f"    {table}[{key}]", flush=True)
+
+
+def _hint(op: PlanOp) -> str:
+    """
+    Short human-readable suffix describing the row. Empty for tables
+    where the logical key already tells the whole story.
+    """
+    table = op.spec.table
+    p = op.payload
+
+    if table == "ads":
+        # Root vs leaf, plus the language for leaves.
+        if p.get("reuse_ad_id") is None:
+            return "(root)"
+        lang = p.get("language_id") or ""
+        return f"leaf lang={lang}" if lang else "leaf"
+
+    if table == "faqs":
+        qid = p.get("question_id")
+        qorder = p.get("question_order")
+        qtype = p.get("question_type", "")
+        return f"question_id={qid} order={qorder} {qtype}".rstrip()
+
+    if table == "qualification_score":
+        level = p.get("level_code", "")
+        score = p.get("score", "")
+        return f"level={level} score={score}"
+
+    if table == "pricing_discounts":
+        pct = p.get("discount_pct", "")
+        label = p.get("label", "")
+        return f"pct={pct} label={label}"
+
+    if table == "client_messages":
+        return "message_text"
+
+    if table == "ad_confirmations":
+        return "message_text"
+
+    if table == "ad_reopen_prompts":
+        return "prompt_text + buttons"
+
+    if table == "client_whatsapps":
+        return p.get("display_phone_number", "")
+
+    if table == "clients":
+        return p.get("name", "")
+
+    if table == "client_users":
+        return p.get("email", "")
+
+    return ""
+
+
+def _fmt_op(op: PlanOp) -> str:
+    """Human-readable identifier for error messages."""
+    key = ":".join(str(k) for k in op.logical_key)
+    return f"{op.spec.table}[{key}]"
 
 
 def _write_one(conn, op: PlanOp):

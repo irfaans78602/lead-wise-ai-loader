@@ -5,7 +5,7 @@ Command-line entry point. Two families of subcommand:
     load <input.json> [--commit] [--seed]   load per-client JSON
     db {drop|create|seed|rebuild}           manage the schema
 
-`load` is the default â€” if the first argument isn't `db` or `load`,
+`load` is the default — if the first argument isn't `db` or `load`,
 it's treated as the input path. So both of these work:
 
     loader clients/leadwise-ai/60-instance.json
@@ -168,9 +168,11 @@ def _run_load(cfg, args) -> int:
         actual_schema_version = conn_mod.current_schema_version(conn)
 
         # 4. Preflight
+        print("preflight", flush=True)
         log.section("preflight")
         try:
             preflight_mod.check(conn, plan)
+            print(f"  entities: {len(plan.ops)} checked, all ok", flush=True)
             log.line(f"entities: {len(plan.ops)} checked, all ok")
         except PreflightError as e:
             for msg in e.messages:
@@ -185,12 +187,15 @@ def _run_load(cfg, args) -> int:
         pre = diff_mod.read_state(conn, plan)
 
         # 6. Transaction
+        print("transaction", flush=True)
         log.section("transaction")
         log.line("BEGIN")
         try:
             write_mod.execute(conn, plan)
+            print("  writes applied", flush=True)
             log.line("writes applied")
             post = diff_mod.read_state(conn, plan)
+            print("  projected state read", flush=True)
             log.line("projected state read")
         except Exception as e:
             conn.rollback()
@@ -211,7 +216,7 @@ def _run_load(cfg, args) -> int:
             log.line("ROLLBACK")
             result = "preview (rolled back, nothing written)"
 
-        # 8. Diff + summary
+        # 8. Diff + summary (log only — console already saw per-row output)
         log.changes(pre, post)
         counts = _count_changes(pre, post)
         log.summary(counts)
@@ -283,7 +288,7 @@ def _print_summary(counts: dict, mode: str, log_path, schema_version):
         print(f"warning:   schema_version={schema_version} "
               f"expected={EXPECTED_SCHEMA_VERSION}")
     if mode == "preview":
-        print("preview only â€” re-run with --commit to apply")
+        print("preview only — re-run with --commit to apply")
     else:
         print("committed")
     print(f"log:       {log_path}")

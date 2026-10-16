@@ -125,8 +125,14 @@ def _plan_payload(payload: dict, plan: Plan, source: str,
 
 def _require_for(obj: dict, default_require: str) -> str:
     """Explicit "new": true|false in the JSON wins; otherwise the
-    caller's default."""
-    if "new" in obj:
+    caller's default.
+
+    The check is on the VALUE, not on key presence. `_plan_root_ad`
+    (and the matrix leaf builder) inject "new": None when the JSON
+    doesn't say, and a presence check would treat that as an explicit
+    `false`, silently overriding the CLI's `--seed` default.
+    """
+    if obj.get("new") is not None:
         return "new" if obj["new"] else "existing"
     return default_require
 

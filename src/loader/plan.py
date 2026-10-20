@@ -183,9 +183,6 @@ def _plan_client(client: dict, plan: Plan, source: str,
         _plan_client_message(client_id, key, msg, plan, source,
                              default_require)
 
-    for wa in client.get("client_whatsapps", []):
-        _plan_client_whatsapp(client_id, wa, plan, source, default_require)
-
 
 def _plan_client_message(client_id, client_key, msg, plan, source,
                          default_require):
@@ -206,23 +203,6 @@ def _plan_client_message(client_id, client_key, msg, plan, source,
         logical_key=(client_key, "client_messages"),
         source_path=source,
         closes_previous=msg.get("closes_previous"),
-    ))
-
-
-def _plan_client_whatsapp(client_id, wa, plan, source, default_require):
-    spec = entities.CLIENT_WHATSAPPS
-    phone_id = wa["phone_number_id"]
-    plan.add(PlanOp(
-        spec=spec,
-        pk=phone_id,
-        payload={
-            "phone_number_id": phone_id,
-            "client_id": client_id,
-            "display_phone_number": wa["display_phone_number"],
-        },
-        require=_require_for(wa, default_require),
-        logical_key=(phone_id,),
-        source_path=source,
     ))
 
 
@@ -289,7 +269,6 @@ def _plan_root_ad(root: dict, plan: Plan, source: str,
             "is_placeholder": root.get("is_placeholder", True),
             "language_code": root.get("language_code"),
             "reopen_policy": root.get("reopen_policy"),
-            "whatsapp_phone_number_id": root.get("whatsapp_phone_number_id"),
             "reuse_root": None,
             "new": root.get("new"),
         },
@@ -366,7 +345,6 @@ def _plan_ad_matrix(matrix: dict, plan: Plan, source: str,
                     "ad_name": name,
                     "is_placeholder": matrix.get("is_placeholder", True),
                     "language_code": loc,
-                    "whatsapp_phone_number_id": ch.get("whatsapp_phone_number_id"),
                     "reuse_root": root_source_id,
                     "new": None,     # already resolved into require
                 },
@@ -399,8 +377,6 @@ def _plan_ad(ad: dict, client_id, plan: Plan, source: str,
         payload["language_id"] = ad["language_code"]
     if ad.get("reopen_policy"):
         payload["reopen_policy"] = ad["reopen_policy"]
-    if ad.get("whatsapp_phone_number_id"):
-        payload["whatsapp_number_id"] = ad["whatsapp_phone_number_id"]
     if ad.get("reuse_root"):
         payload["reuse_ad_id"] = derive("ad", ad["reuse_root"])
         # reuse_ad_id is an FK to an already-planned ad. The root is

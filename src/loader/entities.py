@@ -93,19 +93,6 @@ CLIENT_USERS = EntitySpec(
 )
 
 
-CLIENT_WHATSAPPS = EntitySpec(
-    name="client_whatsapps",
-    table="client_whatsapps",
-    pk_col="phone_number_id",
-    pk_kind="client_whatsapp",
-    natural_key=("phone_number_id",),
-    columns={
-        "phone_number_id": "phone_number_id",
-        "display_phone_number": "display_phone_number",
-    },
-)
-
-
 ADS = EntitySpec(
     name="ads",
     table="ads",
@@ -121,7 +108,6 @@ ADS = EntitySpec(
         "email_bcc": "email_bcc",
         "reopen_policy": "reopen_policy",
         "language_code": "language_id",
-        "whatsapp_phone_number_id": "whatsapp_number_id",
         "start_date": "start_date",
         "end_date": "end_date",
     },
@@ -249,7 +235,6 @@ ALL = {
     for spec in (
         CLIENTS,
         CLIENT_USERS,
-        CLIENT_WHATSAPPS,
         ADS,
         CLIENT_MESSAGES,
         AD_CONFIRMATIONS,

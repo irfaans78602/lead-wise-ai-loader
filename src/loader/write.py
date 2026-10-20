@@ -127,9 +127,6 @@ def _hint(op: PlanOp) -> str:
     if table == "ad_reopen_prompts":
         return "prompt_text + buttons"
 
-    if table == "client_whatsapps":
-        return p.get("display_phone_number", "")
-
     if table == "clients":
         return p.get("name", "")
 

@@ -5,8 +5,8 @@ Registry of entity types the loader knows how to write.
 Each EntitySpec describes:
   - name:         JSON key the entity lives under
   - table:        Postgres table to write
-  - pk_col:       primary key column, or â€” for tables whose real PK is
-                  an IDENTITY the loader never sees â€” the UNIQUE column
+  - pk_col:       primary key column, or - for tables whose real PK is
+                  an IDENTITY the loader never sees - the UNIQUE column
                   used as the row identity across runs
   - pk_kind:      string tag passed to uuid_gen.derive()
   - natural_key:  tuple of PG column names that identify the logical
@@ -68,14 +68,14 @@ CLIENTS = EntitySpec(
 )
 
 
-# client_users.client_user_id is IDENTITY â€” the loader never sees it.
+# client_users.client_user_id is IDENTITY - the loader never sees it.
 # google_sub is UNIQUE and stable across runs, so it is used as the row
 # identity. Everything downstream (preflight, diff, write) keys off
 # spec.pk_col, so no other module needs to know about the trick.
 #
-# client_id is deliberately absent from `columns`: it is populated only
-# when the JSON supplies a `client_key`, and the schema allows it to be
-# NULL until an operator links the user to a client manually.
+# client_key (JSON) is mapped to client_id. preflight converts the key
+# string to the client's UUID. The schema allows client_id to be NULL,
+# so the field is optional in the JSON.
 CLIENT_USERS = EntitySpec(
     name="client_users",
     table="client_users",
@@ -83,6 +83,7 @@ CLIENT_USERS = EntitySpec(
     pk_kind="client_user",
     natural_key=("google_sub",),
     columns={
+        "client_key": "client_id",
         "email": "email",
         "display_name": "display_name",
         "role": "role",
@@ -115,7 +116,7 @@ ADS = EntitySpec(
 
 
 # ---------------------------------------------------------------------
-# Versioned content â€” root-ad-owned
+# Versioned content - root-ad-owned
 # ---------------------------------------------------------------------
 
 CLIENT_MESSAGES = EntitySpec(
@@ -211,6 +212,13 @@ QUALIFICATION_SCORE = EntitySpec(
 # Non-UUID-keyed
 # ---------------------------------------------------------------------
 
+# The schema CHECK fixes which columns each discount_type may carry:
+#   volume       client_id optional; country_id / segment_id NULL
+#   agency_tier  needs country_code; client_id NULL
+#   negotiated   needs client_id (the parent client), segment_code,
+#                field_name, reason; leads_min / leads_max NULL
+# plan.py builds this payload itself and attaches client_id for
+# volume and negotiated rows.
 PRICING_DISCOUNTS = EntitySpec(
     name="pricing_discounts",
     table="pricing_discounts",
@@ -221,6 +229,9 @@ PRICING_DISCOUNTS = EntitySpec(
         "discount_type": "discount_type",
         "leads_min": "leads_min",
         "leads_max": "leads_max",
+        "country_code": "country_id",
+        "segment_code": "segment_id",
+        "field_name": "field_name",
         "discount_pct": "discount_pct",
         "label": "label",
         "reason": "reason",

@@ -2,7 +2,7 @@
 cli.py
 Command-line entry point. Two families of subcommand:
 
-    load <input.json> [--commit] [--seed]   load per-client JSON
+    load <input.json> [--commit]            load per-client JSON
     db {drop|create|seed|rebuild}           manage the schema
 
 `load` is the default — if the first argument isn't `db` or `load`,
@@ -11,13 +11,11 @@ it's treated as the input path. So both of these work:
     loader clients/leadwise-ai/60-instance.json
     loader load clients/leadwise-ai/60-instance.json
 
+Every row is written as "update if the key exists, else insert".
+
 Without --commit, a load runs in preview mode: the transaction is
 opened, writes are performed, state is read back, and the whole thing
 is rolled back. Nothing is committed.
-
---seed flips the default `require` from "existing" to "new". An
-explicit "new": true or "new": false in the JSON still wins. Use
---seed for the first load into an empty database.
 
 Exit codes:
     0  clean preview, or successful commit
@@ -89,9 +87,6 @@ def _build_parser() -> argparse.ArgumentParser:
     load.add_argument("input", help="path to JSON, relative to data_root")
     load.add_argument("--commit", action="store_true",
                       help="apply the transaction instead of rolling back")
-    load.add_argument("--seed", action="store_true",
-                      help="default require='new' for entities that don't "
-                           "say; use for the first load into an empty DB")
     load.add_argument("--data-root", default=None)
     load.add_argument("--schema-root", default=None)
 
@@ -133,12 +128,10 @@ def _run_db(cfg, args) -> int:
 
 def _run_load(cfg, args) -> int:
     mode = "commit" if args.commit else "preview"
-    default_require = "new" if args.seed else "existing"
 
     # 1. Read plan
     try:
-        plan = load_plan(args.input, cfg.data_root,
-                         default_require=default_require)
+        plan = load_plan(args.input, cfg.data_root)
     except FileError as e:
         print(f"file error: {e}", file=sys.stderr)
         return 2
@@ -155,8 +148,6 @@ def _run_load(cfg, args) -> int:
             loader_version=__version__,
             file_sha256=file_hash(str(input_path)),
         )
-        if args.seed:
-            log.line(f"seed mode: default require = new")
     except OSError as e:
         print(f"log error: {e}", file=sys.stderr)
         log.close()

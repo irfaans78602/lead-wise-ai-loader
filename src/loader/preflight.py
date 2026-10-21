@@ -3,16 +3,23 @@ preflight.py
 Runs before the transaction opens. Every check that can be done
 without writing is done here.
 
-Checks:
-  1. For every PlanOp with require="existing", the row exists.
-  2. For every PlanOp with require="new", the row does NOT exist.
-  3. Natural-key columns that carry a code string (country_id holding
-     "ZA" instead of 5) are resolved to the referenced table's ID.
+Checks / resolutions:
+  1. client_id values that arrive as a client_key string
+     ("leadwise-platform") are converted to the client's UUID, derived
+     the same way clients.client_id is derived.
+  2. Code-string columns (country_id holding "ZA" instead of 5) are
+     resolved to the referenced table's ID.
+
+Row existence is NOT checked: write.py updates a row if its key exists
+and inserts it otherwise.
 
 If any check fails, PreflightError is raised with all failures. The
 loader prints them and exits non-zero without writing anything.
 """
 
+import uuid
+
+from loader import uuid_gen
 from loader.errors import PreflightError
 from loader.plan import Plan, PlanOp
 
@@ -31,19 +38,33 @@ def check(conn, plan: Plan) -> None:
     errors = []
 
     for op in plan.ops:
+        _resolve_client_key(op)
         _resolve_lookups(conn, op, errors)
-        _check_require(conn, op, errors)
 
     if errors:
         raise PreflightError(errors)
 
 
+def _resolve_client_key(op: PlanOp):
+    """
+    client_users / pricing_discounts map JSON `client_key` to the
+    `client_id` column. The value arrives as a string; turn it into the
+    client's UUID. A string that is already a UUID is parsed as-is,
+    anything else is derived with uuid_gen.derive("client", key).
+    No-op when the value is absent or already a UUID.
+    """
+    v = op.payload.get("client_id")
+    if isinstance(v, str):
+        try:
+            op.payload["client_id"] = uuid.UUID(v)
+        except ValueError:
+            op.payload["client_id"] = uuid_gen.derive("client", v)
+
+
 def _resolve_lookups(conn, op: PlanOp, errors: list):
     """
-    Turn code strings into IDs. Runs before _check_require so that
-    existence checks see fully-resolved payloads. Idempotent: values
-    that are already non-strings are skipped, so re-running on the
-    same op is safe.
+    Turn code strings into IDs. Idempotent: values that are already
+    non-strings are skipped, so re-running on the same op is safe.
     """
     for pg_col, value in list(op.payload.items()):
         spec = _LOOKUPS.get(pg_col)
@@ -65,80 +86,3 @@ def _resolve_lookups(conn, op: PlanOp, errors: list):
             )
         else:
             op.payload[pg_col] = row["id"]
-
-
-def _check_require(conn, op: PlanOp, errors: list):
-    spec = op.spec
-    exists = _row_exists(conn, op)
-
-    if op.require == "existing" and not exists:
-        errors.append(
-            f"{spec.table}: {_fmt_key(op.logical_key)} required existing but "
-            f"not found ({op.source_path})"
-        )
-    elif op.require == "new" and exists:
-        errors.append(
-            f"{spec.table}: {_fmt_key(op.logical_key)} required new but "
-            f"already exists ({op.source_path})"
-        )
-
-
-def _row_exists(conn, op: PlanOp) -> bool:
-    """
-    Unversioned: PK exists.
-    Versioned:   a current version exists for the logical key, OR the
-                 exact (logical key, start_date) row exists.
-    """
-    spec = op.spec
-
-    if not spec.versioned:
-        if spec.pk_col == "pricing_discount_id":
-            return _pricing_discount_exists(conn, op)
-        with conn.cursor() as cur:
-            cur.execute(
-                f"SELECT 1 FROM {spec.table} WHERE {spec.pk_col} = %s",
-                (op.pk,),
-            )
-            return cur.fetchone() is not None
-
-    # Versioned.
-    # 1. Does the exact (logical_key, start_date) row exist?
-    where = " AND ".join(f"{col} = %s" for col in spec.natural_key)
-    params = [op.payload[col] for col in spec.natural_key]
-    exact_where = where + " AND start_date = %s"
-    exact_params = params + [op.payload["start_date"]]
-
-    with conn.cursor() as cur:
-        cur.execute(
-            f"SELECT 1 FROM {spec.table} WHERE {exact_where}",
-            exact_params,
-        )
-        if cur.fetchone() is not None:
-            return True
-
-    # 2. Is there a current version for the logical key?
-    cur_where = where + " AND end_date = '9999-12-31'"
-    with conn.cursor() as cur:
-        cur.execute(
-            f"SELECT 1 FROM {spec.table} WHERE {cur_where}",
-            params,
-        )
-        return cur.fetchone() is not None
-
-
-def _pricing_discount_exists(conn, op: PlanOp) -> bool:
-    p = op.payload
-    with conn.cursor() as cur:
-        cur.execute(
-            """SELECT 1 FROM pricing_discounts
-               WHERE discount_type = %s
-                 AND leads_min IS NOT DISTINCT FROM %s
-                 AND leads_max IS NOT DISTINCT FROM %s
-                 AND end_date = '9999-12-31'""",
-            (p["discount_type"], p.get("leads_min"), p.get("leads_max")),
-        )
-        return cur.fetchone() is not None
-
-
-def _fmt_key(key: tuple) -> str:
-    return ":".join(str(k) for k in key)

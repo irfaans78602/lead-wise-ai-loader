@@ -6,40 +6,51 @@ A PlanOp is a single row to insert or update. It carries:
   - spec:             EntitySpec
   - pk:               the derived primary key (UUID or natural)
   - payload:          dict of PG column -> value
-  - require:          "new" | "existing"
-  - closes_previous:  for versioned entities, the end_date to stamp on
-                      any other current version of the same logical key.
-                      None means "infer from start_date".
   - logical_key:      tuple identifying the row for error messages
   - source_path:      file location, for error context
 
+Every op is written as "update if the key exists, else insert"
+(see write.py). There is no require / "new" / "existing" mode, and
+versioned rows are never closed.
+
 The plan module does no I/O beyond reading JSON. It does not touch
-the DB. Preflight checks the plan against the DB; write executes it.
+the DB. Preflight resolves lookups against the DB; write executes it.
+
+Pricing
+-------
+Pricing lives inside the client it belongs to:
+
+    "clients": [ { "client_key": "...", ..., "pricing": {
+        "volume_discounts": [...],
+        "agency_tier_discounts": [...],
+        "negotiated_discounts": [...]
+    } } ]
+
+The parent client's client_id is attached to "volume" and "negotiated"
+rows. "agency_tier" rows are platform-wide (the schema requires
+client_id NULL). A top-level "pricing" block is no longer read.
 
 Cross-file client refs
 ----------------------
-A file that carries only ad / matrix / pricing data can reference a
-client that was loaded from a *different* file by name. Because client
-UUIDs are deterministic (`derive("client", client_key)`), the loader
-computes the same UUID the earlier file wrote. If the client was never
-loaded, the FK on ads.client_id fails at write time — preflight cannot
-detect this because it has no way to know which file the client came
-from.
+A file that carries only ad / matrix data can reference a client that
+was loaded from a *different* file by name. Because client UUIDs are
+deterministic (`derive("client", client_key)`), the loader computes the
+same UUID the earlier file wrote. If the client was never loaded, the
+FK on ads.client_id fails at write time.
 
 Encoding
 --------
 Input JSON is read as UTF-8. Message text, question text and option
-labels carry per-locale strings (ar / fr / es / zh / …), so the file
+labels carry per-locale strings (ar / fr / es / zh / ...), so the file
 is never ASCII-only. On Windows, Path.read_text() defaults to the
-system locale codec (cp1252 on most English installs), which cannot
-decode Arabic; the explicit encoding="utf-8" here is required, not
-cosmetic.
+system locale codec, which cannot decode Arabic; the explicit
+encoding="utf-8" here is required, not cosmetic.
 """
 
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from loader import entities
 from loader.errors import FileError
@@ -51,10 +62,8 @@ class PlanOp:
     spec: entities.EntitySpec
     pk: Any
     payload: dict[str, Any]
-    require: str
     logical_key: tuple
     source_path: str
-    closes_previous: Optional[str] = None
 
 
 @dataclass
@@ -68,13 +77,7 @@ class Plan:
 
 # ---------------------------------------------------------------------
 
-def load_plan(json_path: str, data_root: str,
-              default_require: str = "existing") -> Plan:
-    """
-    default_require is applied when the JSON neither sets "new": true
-    nor "new": false. Caller picks "new" for seed runs, "existing" for
-    updates. Default is "existing" — the safe choice.
-    """
+def load_plan(json_path: str, data_root: str) -> Plan:
     path = Path(data_root) / json_path
     if not path.exists():
         raise FileError(f"input file not found: {path}")
@@ -90,58 +93,35 @@ def load_plan(json_path: str, data_root: str,
         raise FileError(f"invalid JSON in {path}: {e}") from e
 
     plan = Plan()
-    _plan_payload(payload, plan, source=str(path),
-                  default_require=default_require)
+    _plan_payload(payload, plan, source=str(path))
     return plan
 
 
-def _plan_payload(payload: dict, plan: Plan, source: str,
-                  default_require: str):
+def _plan_payload(payload: dict, plan: Plan, source: str):
+    # Clients first (this also plans each client's messages and pricing).
     for client in payload.get("clients", []):
-        _plan_client(client, plan, source, default_require)
+        _plan_client(client, plan, source)
 
     # client_users come after clients so optional client_key refs
     # resolve. Users without a client_key are planned with client_id
     # absent and land with NULL, to be linked manually later.
     for user in payload.get("client_users", []):
-        _plan_client_user(user, plan, source, default_require)
+        _plan_client_user(user, plan, source)
 
     root = payload.get("root_ad")
     if root:
-        _plan_root_ad(root, plan, source, default_require)
+        _plan_root_ad(root, plan, source)
 
     matrix = payload.get("ad_matrix")
     if matrix:
-        _plan_ad_matrix(matrix, plan, source, default_require)
-
-    pricing = payload.get("pricing", {})
-    for row in pricing.get("volume_discounts", []):
-        _plan_pricing_discount(row, plan, source, default_require)
-    for row in pricing.get("agency_tier_discounts", []):
-        _plan_pricing_discount(row, plan, source, default_require)
-    for row in pricing.get("negotiated_discounts", []):
-        _plan_pricing_discount(row, plan, source, default_require)
-
-
-def _require_for(obj: dict, default_require: str) -> str:
-    """Explicit "new": true|false in the JSON wins; otherwise the
-    caller's default.
-
-    The check is on the VALUE, not on key presence. `_plan_root_ad`
-    (and the matrix leaf builder) inject "new": None when the JSON
-    doesn't say, and a presence check would treat that as an explicit
-    `false`, silently overriding the CLI's `--seed` default.
-    """
-    if obj.get("new") is not None:
-        return "new" if obj["new"] else "existing"
-    return default_require
+        _plan_ad_matrix(matrix, plan, source)
 
 
 def _resolve_client_ref(plan: Plan, client_key: str):
     """
     Return the client_id for client_key. If the client was planned in
     this same file, use that. Otherwise derive the UUID a prior load
-    of 10-clients.json would have produced — the derivation is
+    of 10-clients.json would have produced - the derivation is
     deterministic, so both runs agree.
     """
     client_id = plan.refs.get(("client", client_key))
@@ -155,14 +135,11 @@ def _resolve_client_ref(plan: Plan, client_key: str):
 # clients
 # ---------------------------------------------------------------------
 
-def _plan_client(client: dict, plan: Plan, source: str,
-                 default_require: str):
+def _plan_client(client: dict, plan: Plan, source: str):
     spec = entities.CLIENTS
     key = client["client_key"]
     client_id = derive("client", key)
     plan.refs[("client", key)] = client_id
-
-    require = _require_for(client, default_require)
 
     payload = {"client_id": client_id}
     for json_field, pg_col in spec.columns.items():
@@ -173,19 +150,20 @@ def _plan_client(client: dict, plan: Plan, source: str,
         spec=spec,
         pk=client_id,
         payload=payload,
-        require=require,
         logical_key=(key,),
         source_path=source,
     ))
 
     msg = client.get("client_messages")
     if msg:
-        _plan_client_message(client_id, key, msg, plan, source,
-                             default_require)
+        _plan_client_message(client_id, key, msg, plan, source)
+
+    pricing = client.get("pricing")
+    if pricing:
+        _plan_client_pricing(client_id, key, pricing, plan, source)
 
 
-def _plan_client_message(client_id, client_key, msg, plan, source,
-                         default_require):
+def _plan_client_message(client_id, client_key, msg, plan, source):
     spec = entities.CLIENT_MESSAGES
     start_date = msg.get("start_date", "1900-01-01")
     pk = derive("client_message", str(client_id), start_date)
@@ -199,10 +177,90 @@ def _plan_client_message(client_id, client_key, msg, plan, source,
             "start_date": start_date,
             "end_date": msg.get("end_date", "9999-12-31"),
         },
-        require=_require_for(msg, default_require),
         logical_key=(client_key, "client_messages"),
         source_path=source,
-        closes_previous=msg.get("closes_previous"),
+    ))
+
+
+# ---------------------------------------------------------------------
+# pricing (nested under a client)
+# ---------------------------------------------------------------------
+
+def _plan_client_pricing(client_id, client_key, pricing, plan, source):
+    for group in ("volume_discounts", "agency_tier_discounts",
+                  "negotiated_discounts"):
+        for row in pricing.get(group, []):
+            _plan_pricing_discount(client_id, client_key, row, plan, source)
+
+
+def _plan_pricing_discount(client_id, client_key, row: dict,
+                           plan: Plan, source: str):
+    """
+    The schema's CHECK on pricing_discounts fixes which columns each
+    discount_type may carry:
+
+      volume       client_id optional (set to the parent client);
+                   country_id, segment_id, field_name NULL;
+                   leads_min/leads_max required.
+      agency_tier  client_id NULL; country_id (country_code) set;
+                   leads_min/leads_max required.
+      negotiated   client_id set (the parent client); segment_id
+                   (segment_code), field_name and reason required;
+                   leads_min/leads_max NULL.
+
+    The parent's client_id is attached to volume and negotiated rows.
+    agency_tier rows stay platform-wide (client_id NULL).
+    """
+    spec = entities.PRICING_DISCOUNTS
+    dtype = row["discount_type"]
+
+    payload: dict[str, Any] = {
+        "discount_type": dtype,
+        "leads_min": row.get("leads_min"),
+        "leads_max": row.get("leads_max"),
+        "discount_pct": row["discount_pct"],
+        "label": row["label"],
+        "reason": row.get("reason"),
+        "start_date": row.get("start_date", "1900-01-01"),
+        "end_date": row.get("end_date", "9999-12-31"),
+    }
+
+    if row.get("country_code"):
+        payload["country_id"] = row["country_code"]      # resolved in preflight
+    if row.get("segment_code"):
+        payload["segment_id"] = row["segment_code"]      # resolved in preflight
+    if row.get("field_name"):
+        payload["field_name"] = row["field_name"]
+
+    label_key = [dtype, row.get("leads_min"), row.get("leads_max")]
+
+    if dtype == "volume":
+        payload["client_id"] = client_id
+        label_key = [client_key, dtype, row.get("leads_min"),
+                     row.get("leads_max")]
+    elif dtype == "negotiated":
+        missing = [k for k in ("segment_code", "field_name", "reason")
+                   if not row.get(k)]
+        if missing:
+            raise FileError(
+                f"pricing[{client_key}] negotiated '{row['label']}': "
+                f"missing {', '.join(missing)}"
+            )
+        payload["client_id"] = client_id
+        label_key = [client_key, dtype, row["segment_code"],
+                     row["field_name"]]
+    elif dtype == "agency_tier" and not row.get("country_code"):
+        raise FileError(
+            f"pricing[{client_key}] agency_tier '{row['label']}': "
+            f"country_code is required"
+        )
+
+    plan.add(PlanOp(
+        spec=spec,
+        pk=None,
+        payload=payload,
+        logical_key=tuple(label_key),
+        source_path=source,
     ))
 
 
@@ -210,8 +268,7 @@ def _plan_client_message(client_id, client_key, msg, plan, source,
 # client_users
 # ---------------------------------------------------------------------
 
-def _plan_client_user(user: dict, plan: Plan, source: str,
-                      default_require: str):
+def _plan_client_user(user: dict, plan: Plan, source: str):
     spec = entities.CLIENT_USERS
     google_sub = user["google_sub"]
 
@@ -233,7 +290,8 @@ def _plan_client_user(user: dict, plan: Plan, source: str,
         )
 
     # Optional linkage. Absent client_key => row is written with
-    # client_id = NULL and linked later by hand.
+    # client_id = NULL and linked later by hand. When present, the key
+    # string copied above is replaced by the client's UUID.
     client_key = user.get("client_key")
     if client_key is not None:
         client_id = plan.refs.get(("client", client_key))
@@ -248,7 +306,6 @@ def _plan_client_user(user: dict, plan: Plan, source: str,
         spec=spec,
         pk=google_sub,
         payload=payload,
-        require=_require_for(user, default_require),
         logical_key=(google_sub,),
         source_path=source,
     ))
@@ -258,8 +315,7 @@ def _plan_client_user(user: dict, plan: Plan, source: str,
 # ads
 # ---------------------------------------------------------------------
 
-def _plan_root_ad(root: dict, plan: Plan, source: str,
-                  default_require: str):
+def _plan_root_ad(root: dict, plan: Plan, source: str):
     client_id = _resolve_client_ref(plan, root["client_key"])
 
     _plan_ad(
@@ -270,32 +326,27 @@ def _plan_root_ad(root: dict, plan: Plan, source: str,
             "language_code": root.get("language_code"),
             "reopen_policy": root.get("reopen_policy"),
             "reuse_root": None,
-            "new": root.get("new"),
         },
         client_id,
-        plan, source, default_require,
+        plan, source,
     )
 
     ad_id = plan.refs[("ad", root["source_ad_id"])]
 
     if root.get("ad_confirmations"):
         _plan_ad_confirmation(ad_id, root["source_ad_id"],
-                              root["ad_confirmations"], plan, source,
-                              default_require)
+                              root["ad_confirmations"], plan, source)
     if root.get("ad_reopen_prompts"):
         _plan_ad_reopen_prompt(ad_id, root["source_ad_id"],
-                               root["ad_reopen_prompts"], plan, source,
-                               default_require)
+                               root["ad_reopen_prompts"], plan, source)
     for faq in root.get("faqs", []):
-        _plan_faq(ad_id, root["source_ad_id"], faq, plan, source,
-                  default_require)
+        _plan_faq(ad_id, root["source_ad_id"], faq, plan, source)
     for band in root.get("qualification_score", []):
         _plan_qualification_score(ad_id, root["source_ad_id"], band,
-                                  plan, source, default_require)
+                                  plan, source)
 
 
-def _plan_ad_matrix(matrix: dict, plan: Plan, source: str,
-                    default_require: str):
+def _plan_ad_matrix(matrix: dict, plan: Plan, source: str):
     client_id = _resolve_client_ref(plan, matrix["client_key"])
 
     root_source_id = matrix["reuse_root"]
@@ -313,15 +364,6 @@ def _plan_ad_matrix(matrix: dict, plan: Plan, source: str,
     id_pattern = matrix["source_ad_id_pattern"]
     name_pattern = matrix["ad_name_pattern"]
 
-    # Matrix-level "new" applies to every leaf unless an override says
-    # otherwise. Falls back to the CLI default if the matrix doesn't say.
-    matrix_new = matrix.get("new")
-    matrix_default = (
-        "new" if matrix_new else
-        "existing" if matrix_new is False else
-        default_require
-    )
-
     for ch in channels:
         for loc in locales:
             key = f"{ch['code']}:{loc}"
@@ -330,14 +372,11 @@ def _plan_ad_matrix(matrix: dict, plan: Plan, source: str,
 
             source_id = id_pattern.format(channel=ch["code"], locale=loc)
             name = name_pattern.format(channel_name=ch["name"], locale=loc)
-            require = matrix_default
 
             if key in overrides:
                 o = overrides[key]
                 source_id = o.get("source_ad_id", source_id)
                 name = o.get("ad_name", name)
-                if "new" in o:
-                    require = "new" if o["new"] else "existing"
 
             _plan_ad(
                 {
@@ -346,25 +385,17 @@ def _plan_ad_matrix(matrix: dict, plan: Plan, source: str,
                     "is_placeholder": matrix.get("is_placeholder", True),
                     "language_code": loc,
                     "reuse_root": root_source_id,
-                    "new": None,     # already resolved into require
                 },
                 client_id,
-                plan, source, default_require,
-                override_require=require,
+                plan, source,
             )
 
 
-def _plan_ad(ad: dict, client_id, plan: Plan, source: str,
-             default_require: str, override_require: Optional[str] = None):
+def _plan_ad(ad: dict, client_id, plan: Plan, source: str):
     spec = entities.ADS
     source_id = ad["source_ad_id"]
     ad_id = derive("ad", source_id)
     plan.refs[("ad", source_id)] = ad_id
-
-    if override_require is not None:
-        require = override_require
-    else:
-        require = _require_for(ad, default_require)
 
     payload = {
         "ad_id": ad_id,
@@ -378,25 +409,20 @@ def _plan_ad(ad: dict, client_id, plan: Plan, source: str,
     if ad.get("reopen_policy"):
         payload["reopen_policy"] = ad["reopen_policy"]
     if ad.get("reuse_root"):
+        # FK to an already-planned ad; the root is planned earlier in
+        # the same file.
         payload["reuse_ad_id"] = derive("ad", ad["reuse_root"])
-        # reuse_ad_id is an FK to an already-planned ad. The root is
-        # planned earlier in the same file, so its own PlanOp carries
-        # the correct require. Leaves inherit their require from the
-        # JSON (or the CLI default) — do NOT override to "existing"
-        # here, or fresh seeds fail.
 
     plan.add(PlanOp(
         spec=spec,
         pk=ad_id,
         payload=payload,
-        require=require,
         logical_key=(source_id,),
         source_path=source,
     ))
 
 
-def _plan_ad_confirmation(ad_id, source_id, conf, plan, source,
-                          default_require):
+def _plan_ad_confirmation(ad_id, source_id, conf, plan, source):
     spec = entities.AD_CONFIRMATIONS
     start_date = conf.get("start_date", "1900-01-01")
     pk = derive("ad_confirmation", str(ad_id), start_date)
@@ -410,15 +436,12 @@ def _plan_ad_confirmation(ad_id, source_id, conf, plan, source,
             "start_date": start_date,
             "end_date": conf.get("end_date", "9999-12-31"),
         },
-        require=_require_for(conf, default_require),
         logical_key=(source_id, "ad_confirmations", start_date),
         source_path=source,
-        closes_previous=conf.get("closes_previous"),
     ))
 
 
-def _plan_ad_reopen_prompt(ad_id, source_id, prompt, plan, source,
-                           default_require):
+def _plan_ad_reopen_prompt(ad_id, source_id, prompt, plan, source):
     spec = entities.AD_REOPEN_PROMPTS
     start_date = prompt.get("start_date", "1900-01-01")
     pk = derive("ad_reopen_prompt", str(ad_id), start_date)
@@ -434,14 +457,12 @@ def _plan_ad_reopen_prompt(ad_id, source_id, prompt, plan, source,
             "start_date": start_date,
             "end_date": prompt.get("end_date", "9999-12-31"),
         },
-        require=_require_for(prompt, default_require),
         logical_key=(source_id, "ad_reopen_prompts", start_date),
         source_path=source,
-        closes_previous=prompt.get("closes_previous"),
     ))
 
 
-def _plan_faq(ad_id, source_id, faq, plan, source, default_require):
+def _plan_faq(ad_id, source_id, faq, plan, source):
     spec = entities.FAQS
     question_id = faq["question_id"]
     start_date = faq.get("start_date", "1900-01-01")
@@ -462,15 +483,12 @@ def _plan_faq(ad_id, source_id, faq, plan, source, default_require):
             "start_date": start_date,
             "end_date": faq.get("end_date", "9999-12-31"),
         },
-        require=_require_for(faq, default_require),
         logical_key=(source_id, "faqs", question_id, start_date),
         source_path=source,
-        closes_previous=faq.get("closes_previous"),
     ))
 
 
-def _plan_qualification_score(ad_id, source_id, band, plan, source,
-                              default_require):
+def _plan_qualification_score(ad_id, source_id, band, plan, source):
     spec = entities.QUALIFICATION_SCORE
     level_code = band["level_code"]
     start_date = band.get("start_date", "1900-01-01")
@@ -486,38 +504,6 @@ def _plan_qualification_score(ad_id, source_id, band, plan, source,
             "start_date": start_date,
             "end_date": band.get("end_date", "9999-12-31"),
         },
-        require=_require_for(band, default_require),
         logical_key=(source_id, "qscore", level_code, start_date),
-        source_path=source,
-        closes_previous=band.get("closes_previous"),
-    ))
-
-
-# ---------------------------------------------------------------------
-# pricing
-# ---------------------------------------------------------------------
-
-def _plan_pricing_discount(row: dict, plan: Plan, source: str,
-                           default_require: str):
-    spec = entities.PRICING_DISCOUNTS
-    plan.add(PlanOp(
-        spec=spec,
-        pk=None,
-        payload={
-            "discount_type": row["discount_type"],
-            "leads_min": row.get("leads_min"),
-            "leads_max": row.get("leads_max"),
-            "discount_pct": row["discount_pct"],
-            "label": row["label"],
-            "reason": row.get("reason"),
-            "start_date": row.get("start_date", "1900-01-01"),
-            "end_date": row.get("end_date", "9999-12-31"),
-        },
-        require=_require_for(row, default_require),
-        logical_key=(
-            row["discount_type"],
-            row.get("leads_min"),
-            row.get("leads_max"),
-        ),
         source_path=source,
     ))

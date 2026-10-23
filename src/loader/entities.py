@@ -62,6 +62,7 @@ CLIENTS = EntitySpec(
         "pilot_ends_on": "pilot_ends_on",
         "closed_behavior": "closed_behavior",
         "reopen_policy": "reopen_policy",
+        "allowed_origins": "allowed_origins",
         "start_date": "start_date",
         "end_date": "end_date",
     },

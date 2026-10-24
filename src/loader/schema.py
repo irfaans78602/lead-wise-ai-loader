@@ -1,7 +1,8 @@
 """
 schema.py
 Applies SQL from the schema repo. Subcommands: drop, create, seed,
-rebuild. All SQL files are read directly from LW_SCHEMA_ROOT.
+rebuild. All SQL files are read directly from the profile's schema
+root (<PREFIX>_SCHEMA_ROOT, or --schema-root on the command line).
 
 Layout the loader expects:
 

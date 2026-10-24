@@ -3,14 +3,14 @@
 # Build:
 #   docker build -t leadwise-loader .
 #
-# Run (schema and data mounted at runtime):
+# Run (profile = website | rag | master; schema and data mounted):
 #   docker run --rm \
-#     -e DATABASE_URL=postgres://... \
-#     -v /path/to/lead-wise-ai-data:/data \
-#     -v /path/to/lead-wise-ai-schema:/schema \
-#     -e LW_DATA_ROOT=/data \
-#     -e LW_SCHEMA_ROOT=/schema \
-#     leadwise-loader clients/leadwise-ai/60-instance.json --commit
+#     -e WEBSITE_DATABASE_URL=postgresql://... \
+#     -e WEBSITE_DATA_ROOT=/data \
+#     -e WEBSITE_SCHEMA_ROOT=/schema \
+#     -v /path/to/data/website:/data \
+#     -v /path/to/schema/website:/schema \
+#     leadwise-loader load leadwise-ai/60-instance.json --profile website --commit
 
 FROM python:3.12-slim
 

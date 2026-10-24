@@ -1,6 +1,6 @@
 """
-entities.py
-Registry of entity types the loader knows how to write.
+entities/website.py
+Registry of entity types the loader knows how to write (website DB).
 
 Each EntitySpec describes:
   - name:         JSON key the entity lives under
@@ -22,20 +22,7 @@ Each EntitySpec describes:
                   plan time.
 """
 
-from dataclasses import dataclass, field
-
-
-@dataclass(frozen=True)
-class EntitySpec:
-    name: str
-    table: str
-    pk_col: str
-    pk_kind: str
-    natural_key: tuple[str, ...]
-    versioned: bool = False
-    version_key: tuple[str, ...] = ()
-    columns: dict[str, str] = field(default_factory=dict)
-    parent_refs: dict[str, tuple[str, str]] = field(default_factory=dict)
+from loader.entities import EntitySpec
 
 
 # ---------------------------------------------------------------------
@@ -69,14 +56,6 @@ CLIENTS = EntitySpec(
 )
 
 
-# client_users.client_user_id is IDENTITY - the loader never sees it.
-# google_sub is UNIQUE and stable across runs, so it is used as the row
-# identity. Everything downstream (preflight, diff, write) keys off
-# spec.pk_col, so no other module needs to know about the trick.
-#
-# client_key (JSON) is mapped to client_id. preflight converts the key
-# string to the client's UUID. The schema allows client_id to be NULL,
-# so the field is optional in the JSON.
 CLIENT_USERS = EntitySpec(
     name="client_users",
     table="client_users",
@@ -209,17 +188,6 @@ QUALIFICATION_SCORE = EntitySpec(
 )
 
 
-# ---------------------------------------------------------------------
-# Non-UUID-keyed
-# ---------------------------------------------------------------------
-
-# The schema CHECK fixes which columns each discount_type may carry:
-#   volume       client_id optional; country_id / segment_id NULL
-#   agency_tier  needs country_code; client_id NULL
-#   negotiated   needs client_id (the parent client), segment_code,
-#                field_name, reason; leads_min / leads_max NULL
-# plan.py builds this payload itself and attaches client_id for
-# volume and negotiated rows.
 PRICING_DISCOUNTS = EntitySpec(
     name="pricing_discounts",
     table="pricing_discounts",

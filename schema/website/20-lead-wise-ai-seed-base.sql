@@ -1,0 +1,367 @@
+-- =============================================================
+-- 20-lead-wise-ai-seed-base.sql
+-- Base reference data for the LeadWise AI platform.
+-- Run after 10-lead-wise-ai-schema.sql.
+-- Run BEFORE 30/40/50 (pricing) and 60-lead-wise-ai-seed.sql.
+-- Safe to re-run: all inserts and updates are idempotent.
+-- =============================================================
+
+BEGIN;
+
+-- =============================================================
+-- 1. Languages
+-- =============================================================
+INSERT INTO languages (code, name, native_name) VALUES
+    ('en', 'English', 'English'),
+    ('ar', 'Arabic',  'Ø§Ù„Ø¹Ø±Ø¨ÙŠØ©'),
+    ('es', 'Spanish', 'EspaÃ±ol'),
+    ('fr', 'French',  'FranÃ§ais'),
+    ('zh', 'Chinese', 'ä¸­æ–‡')
+ON CONFLICT (code) DO NOTHING;
+
+-- =============================================================
+-- 2. Currencies
+-- =============================================================
+INSERT INTO currencies (code, name, symbol, minor_unit) VALUES
+    ('ZAR', 'South African Rand', 'R', 2),
+    ('USD', 'US Dollar',          '$', 2),
+    ('GBP', 'British Pound',      'Â£', 2)
+ON CONFLICT (code) DO NOTHING;
+
+-- =============================================================
+-- 3. Countries
+-- =============================================================
+INSERT INTO countries (code, name, default_language_id, default_currency_id)
+SELECT v.code, v.name, l.language_id, c.currency_id
+FROM (VALUES
+    ('ZA', 'South Africa',   'en', 'ZAR'),
+    ('GB', 'United Kingdom', 'en', 'GBP'),
+    ('US', 'United States',  'en', 'USD')
+) AS v(code, name, lang_code, curr_code)
+JOIN languages  l ON l.code = v.lang_code
+JOIN currencies c ON c.code = v.curr_code
+ON CONFLICT (code) DO NOTHING;
+
+-- =============================================================
+-- 4. Segments
+-- =============================================================
+INSERT INTO segments (code, name) VALUES
+    ('trades_home_services',    'Trades & Home Services'),
+    ('beauty_personal_care',    'Beauty & Personal Care'),
+    ('pet_services',            'Pet Services'),
+    ('hospitality_bookings',    'Hospitality & Bookings'),
+    ('fitness_coaching',        'Fitness & Coaching'),
+    ('education_training',      'Education & Training'),
+    ('professional_services',   'Professional Services'),
+    ('automotive',              'Automotive'),
+    ('retail_ecommerce',        'Retail & E-commerce'),
+    ('health_wellness',         'Health & Wellness'),
+    ('high_ticket_services',    'High-Ticket Services'),
+    ('real_estate',             'Real Estate'),
+    ('b2b_enterprise',          'B2B / Enterprise'),
+    ('financial_services',      'Financial Services'),
+    ('legal_services',          'Legal Services'),
+    ('travel_tourism',          'Travel & Tourism'),
+    ('logistics_transport',     'Logistics & Transport'),
+    ('agriculture_farming',     'Agriculture & Farming'),
+    ('events_entertainment',    'Events & Entertainment'),
+    ('non_profit_ngo',          'Non-Profit / NGO'),
+    ('franchise_groups',        'Franchise Groups'),
+    ('saas_it',                 'SaaS, IT & Technology'),
+    ('other_bespoke',           'Other / Bespoke')
+ON CONFLICT (code) DO NOTHING;
+
+-- =============================================================
+-- 5. Qualification Levels
+-- =============================================================
+INSERT INTO qualification_levels (level_code, language_id, label)
+SELECT v.level_code, l.language_id, v.label
+FROM (VALUES
+    ('low',       'en', 'Low'),
+    ('medium',    'en', 'Medium'),
+    ('high',      'en', 'High'),
+    ('very_high', 'en', 'Very High'),
+    ('low',       'ar', 'Ù…Ù†Ø®ÙØ¶'),
+    ('medium',    'ar', 'Ù…ØªÙˆØ³Ø·'),
+    ('high',      'ar', 'Ù…Ø±ØªÙØ¹'),
+    ('very_high', 'ar', 'Ù…Ø±ØªÙØ¹ Ø¬Ø¯Ø§Ù‹'),
+    ('low',       'es', 'Bajo'),
+    ('medium',    'es', 'Medio'),
+    ('high',      'es', 'Alto'),
+    ('very_high', 'es', 'Muy alto'),
+    ('low',       'fr', 'Faible'),
+    ('medium',    'fr', 'Moyen'),
+    ('high',      'fr', 'Ã‰levÃ©'),
+    ('very_high', 'fr', 'TrÃ¨s Ã©levÃ©'),
+    ('low',       'zh', 'ä½Ž'),
+    ('medium',    'zh', 'ä¸­'),
+    ('high',      'zh', 'é«˜'),
+    ('very_high', 'zh', 'éžå¸¸é«˜')
+) AS v(level_code, lang_code, label)
+JOIN languages l ON l.code = v.lang_code
+ON CONFLICT (level_code, language_id, start_date) DO NOTHING;
+
+-- =============================================================
+-- 6. Messages â€” customer_status_labels
+-- =============================================================
+INSERT INTO messages (message_code, message_text, description)
+VALUES (
+    'customer_status_labels',
+    '{
+        "en": {
+            "Pending":            "Pending",
+            "Contacted":          "Contacted",
+            "Qualified":          "Qualified",
+            "Not-Qualified":      "Not-Qualified",
+            "No-Response":        "No Response",
+            "Bad-Contact":        "Bad Contact",
+            "Duplicate":          "Duplicate",
+            "Callback-Requested": "Callback Requested",
+            "Withdrawn":          "Withdrawn",
+            "Converted":          "Converted"
+        },
+        "ar": {
+            "Pending":            "Ù…Ø¹Ù„Ù‘Ù‚",
+            "Contacted":          "ØªÙ… Ø§Ù„ØªÙˆØ§ØµÙ„",
+            "Qualified":          "Ù…Ø¤Ù‡ÙŽÙ‘Ù„",
+            "Not-Qualified":      "ØºÙŠØ± Ù…Ø¤Ù‡ÙŽÙ‘Ù„",
+            "No-Response":        "Ù„Ø§ ÙŠÙˆØ¬Ø¯ Ø±Ø¯",
+            "Bad-Contact":        "Ø¨ÙŠØ§Ù†Ø§Øª Ø§ØªØµØ§Ù„ Ø®Ø§Ø·Ø¦Ø©",
+            "Duplicate":          "Ù…ÙƒØ±ÙŽÙ‘Ø±",
+            "Callback-Requested": "Ø·Ù„Ø¨ Ù…Ø¹Ø§ÙˆØ¯Ø© Ø§Ù„Ø§ØªØµØ§Ù„",
+            "Withdrawn":          "Ù…Ù†Ø³Ø­Ø¨",
+            "Converted":          "Ù…ÙØ­ÙˆÙŽÙ‘Ù„"
+        },
+        "es": {
+            "Pending":            "Pendiente",
+            "Contacted":          "Contactado",
+            "Qualified":          "Cualificado",
+            "Not-Qualified":      "No cualificado",
+            "No-Response":        "Sin respuesta",
+            "Bad-Contact":        "Contacto incorrecto",
+            "Duplicate":          "Duplicado",
+            "Callback-Requested": "Solicitud de devoluciÃ³n de llamada",
+            "Withdrawn":          "Retirado",
+            "Converted":          "Convertido"
+        },
+        "fr": {
+            "Pending":            "En attente",
+            "Contacted":          "ContactÃ©",
+            "Qualified":          "QualifiÃ©",
+            "Not-Qualified":      "Non qualifiÃ©",
+            "No-Response":        "Sans rÃ©ponse",
+            "Bad-Contact":        "CoordonnÃ©es erronÃ©es",
+            "Duplicate":          "Doublon",
+            "Callback-Requested": "Rappel demandÃ©",
+            "Withdrawn":          "RetirÃ©",
+            "Converted":          "Converti"
+        },
+        "zh": {
+            "Pending":            "å¾…å¤„ç†",
+            "Contacted":          "å·²è”ç³»",
+            "Qualified":          "å·²åˆæ ¼",
+            "Not-Qualified":      "æœªåˆæ ¼",
+            "No-Response":        "æ— å›žå¤",
+            "Bad-Contact":        "è”ç³»æ–¹å¼é”™è¯¯",
+            "Duplicate":          "é‡å¤",
+            "Callback-Requested": "è¯·æ±‚å›žç”µ",
+            "Withdrawn":          "å·²æ’¤å›ž",
+            "Converted":          "å·²è½¬åŒ–"
+        }
+    }'::jsonb,
+    'Dashboard labels for customers.status and customer_statuses.status, keyed by language code then status code.'
+)
+ON CONFLICT (message_code) DO UPDATE
+SET message_text = messages.message_text || EXCLUDED.message_text,
+    description  = EXCLUDED.description;
+
+-- =============================================================
+-- 7. Messages â€” system prompts
+-- =============================================================
+INSERT INTO messages (message_code, message_text, description) VALUES
+    ('rate_limit',
+     '{"en": "I''m having trouble understanding your responses. Let''s pause this conversation for now â€” feel free to try again later, or contact us directly."}'::jsonb,
+     'Sent when a conversation hits the invalid-answer cap'),
+
+    ('invalid_phone',
+     '{"en": "That doesn''t look like a valid phone number. Please include your country code, e.g. +27821234567."}'::jsonb,
+     'Sent when a phone number answer fails validation'),
+
+    ('invalid_email',
+     '{"en": "That doesn''t look like a valid email address, e.g. name@example.com."}'::jsonb,
+     'Sent when an email answer fails validation'),
+
+    ('empty_answer',
+     '{"en": "Sorry, I didn''t catch that â€” could you answer again?"}'::jsonb,
+     'Sent when a mandatory question receives a blank reply'),
+
+    ('radio_invalid',
+     '{"en": "Please choose one of the options below."}'::jsonb,
+     'Sent when a radio/dropdown_single answer doesn''t match any option'),
+
+    ('dropdown_multi_invalid',
+     '{"en": "I didn''t recognise ''{part}''. Please choose from the options below."}'::jsonb,
+     'Sent when one part of a dropdown_multi answer doesn''t match any option'),
+
+    ('unsupported_type',
+     '{"en": "Unsupported question type."}'::jsonb,
+     'Sent when a faq row has a question_type the engine doesn''t understand'),
+
+    ('suggest_phone',
+     '{"en": "Did you mean {part}? If so, please reply with exactly that number."}'::jsonb,
+     'Sent when the AI suggests a corrected phone number'),
+
+    ('suggest_email',
+     '{"en": "Did you mean {part}? If so, please reply with exactly that address."}'::jsonb,
+     'Sent when the AI suggests a corrected email address'),
+
+    ('default_confirmation',
+     '{
+        "en": "Thank you {10}! That''s everything we need â€” our team will be in touch shortly.",
+        "ar": "Ø´ÙƒØ±Ø§Ù‹ Ù„Ùƒ {10}! Ù‡Ø°Ø§ ÙƒÙ„ Ù…Ø§ Ù†Ø­ØªØ§Ø¬Ù‡ â€” Ø³ÙŠØªÙˆØ§ØµÙ„ Ù…Ø¹Ùƒ ÙØ±ÙŠÙ‚Ù†Ø§ Ù‚Ø±ÙŠØ¨Ø§Ù‹.",
+        "es": "Â¡Gracias, {10}! Eso es todo lo que necesitamos â€” nuestro equipo se pondrÃ¡ en contacto pronto.",
+        "fr": "Merci {10} ! C''est tout ce dont nous avons besoin â€” notre Ã©quipe vous contactera bientÃ´t.",
+        "zh": "è°¢è°¢æ‚¨ï¼Œ{10}ï¼æˆ‘ä»¬éœ€è¦çš„ä¿¡æ¯å·²ç»é½å…¨â€”â€”æˆ‘ä»¬çš„å›¢é˜Ÿä¼šå°½å¿«ä¸Žæ‚¨è”ç³»ã€‚"
+     }'::jsonb,
+     'Fallback confirmation sent when an ad has no ad_confirmations row'),
+
+    ('default_closed',
+     '{"en": "Thank you for your message. This business is no longer accepting enquiries. We wish you well."}'::jsonb,
+     'Fallback closed message sent when a client has no client_messages row'),
+
+    ('default_reopen_prompt',
+     '{
+        "en": "Thanks for reaching out again, {10}. Your previous enquiry is with our team. Would you like to start a new enquiry?",
+        "ar": "Ø´ÙƒØ±Ø§Ù‹ Ù„ØªÙˆØ§ØµÙ„Ùƒ Ù…Ø±Ø© Ø£Ø®Ø±Ù‰ØŒ {10}. Ø§Ø³ØªÙØ³Ø§Ø±Ùƒ Ø§Ù„Ø³Ø§Ø¨Ù‚ Ù‚ÙŠØ¯ Ø§Ù„Ù…Ø¹Ø§Ù„Ø¬Ø© Ù…Ù† Ù‚Ø¨Ù„ ÙØ±ÙŠÙ‚Ù†Ø§. Ù‡Ù„ ØªØ±ØºØ¨ ÙÙŠ Ø¨Ø¯Ø¡ Ø§Ø³ØªÙØ³Ø§Ø± Ø¬Ø¯ÙŠØ¯ØŸ",
+        "es": "Gracias por contactarnos de nuevo, {10}. Su consulta anterior estÃ¡ con nuestro equipo. Â¿Le gustarÃ­a iniciar una nueva consulta?",
+        "fr": "Merci de nous avoir recontactÃ©s, {10}. Votre demande prÃ©cÃ©dente est entre les mains de notre Ã©quipe. Souhaitez-vous commencer une nouvelle demande ?",
+        "zh": "æ„Ÿè°¢æ‚¨å†æ¬¡è”ç³»æˆ‘ä»¬ï¼Œ{10}ã€‚æ‚¨ä¹‹å‰çš„å’¨è¯¢å·²ç”±æˆ‘ä»¬çš„å›¢é˜Ÿå¤„ç†ã€‚æ‚¨æƒ³å¼€å§‹æ–°çš„å’¨è¯¢å—ï¼Ÿ"
+     }'::jsonb,
+     'Fallback reopen prompt body, when an ad has no ad_reopen_prompts row'),
+
+    ('default_reopen_button_title',
+     '{
+        "en": "Yes, start fresh",
+        "ar": "Ù†Ø¹Ù…ØŒ Ø§Ø¨Ø¯Ø£ Ù…Ù† Ø¬Ø¯ÙŠØ¯",
+        "es": "SÃ­, empezar de nuevo",
+        "fr": "Oui, recommencer",
+        "zh": "æ˜¯çš„ï¼Œé‡æ–°å¼€å§‹"
+     }'::jsonb,
+     'Fallback label for the reopen button'),
+
+    ('default_forward_button_title',
+     '{
+        "en": "No, just pass this on",
+        "ar": "Ù„Ø§ØŒ ÙÙ‚Ø· Ù…Ø±Ù‘Ø± Ù‡Ø°Ø§",
+        "es": "No, solo reenvÃ­elo",
+        "fr": "Non, transmettez simplement",
+        "zh": "ä¸ï¼Œåªæ˜¯è½¬è¾¾ä¸€ä¸‹"
+     }'::jsonb,
+     'Fallback label for the forward button')
+ON CONFLICT (message_code) DO NOTHING;
+
+-- =============================================================
+-- 8. Settings
+-- =============================================================
+INSERT INTO settings (setting_key, setting_value, setting_type, description) VALUES
+    ('agency_discount_pct',       20.0000,  'number',  'Wholesale discount for agencies'),
+    ('bundle_bots_seo_pct',       10.0000,  'number',  'Bundle discount: Bots + SEO'),
+    ('bundle_bots_seo_ads_pct',   15.0000,  'number',  'Bundle discount: Bots + SEO + Ads'),
+    ('bundle_bots_seo_wp_pct',    15.0000,  'number',  'Bundle discount: Bots + SEO + WordPress'),
+    ('bundle_full_stack_pct',     20.0000,  'number',  'Bundle discount: all four services'),
+    ('pilot_setup_discount_pct', 100.0000,  'number',  'Pilot: setup fee waived'),
+    ('pilot_base_discount_pct',   50.0000,  'number',  'Pilot: base fee halved'),
+    ('pilot_duration_months',      6.0000,  'number',  'Pilot pricing duration in months'),
+    ('max_invalid_answers',        5.0000,  'integer', 'Consecutive invalid answers before rate-limiting'),
+    ('rate_limit_cooldown_hours', 24.0000,  'number',  'Cool-down duration after rate limiting'),
+    ('rate_limit_window_seconds_1', 60.0000,   'number', 'First rate-limit window (seconds)'),
+    ('rate_limit_max_1',             10.0000,  'number', 'Max messages in window 1'),
+    ('rate_limit_window_seconds_2', 3600.0000, 'number', 'Second rate-limit window (seconds)'),
+    ('rate_limit_max_2',             60.0000,  'number', 'Max messages in window 2'),
+    ('rate_limit_window_seconds_3', 86400.0000,'number', 'Third rate-limit window (seconds)'),
+    ('rate_limit_max_3',            200.0000,  'number', 'Max messages in window 3'),
+    ('rate_limit_cleanup_hours',     48.0000,  'number', 'Prune rate-limit rows older than this')
+ON CONFLICT (setting_key) DO NOTHING;
+
+-- =============================================================
+-- 9. Pricing Tiers
+-- =============================================================
+INSERT INTO pricing_tiers (tier_code, tier_name, tier_order, description) VALUES
+    ('standard',     'Standard',     1, 'Trades, beauty, pet, non-profit, hospitality, fitness'),
+    ('professional', 'Professional', 2, 'Education, professional services, retail, travel'),
+    ('high_value',   'High-Value',   3, 'Automotive, health, high-ticket, logistics, agriculture, events, other'),
+    ('premium',      'Premium',      4, 'Real estate, B2B, financial, legal, franchise, SaaS')
+ON CONFLICT (tier_code) DO NOTHING;
+
+-- =============================================================
+-- 10. Pricing Segment Tiers
+-- =============================================================
+INSERT INTO pricing_segment_tiers (segment_id, tier_id)
+SELECT s.segment_id, t.tier_id
+FROM (VALUES
+    ('trades_home_services',  'standard'),
+    ('beauty_personal_care',  'standard'),
+    ('pet_services',          'standard'),
+    ('non_profit_ngo',        'standard'),
+    ('hospitality_bookings',  'standard'),
+    ('fitness_coaching',      'standard'),
+    ('education_training',    'professional'),
+    ('professional_services', 'professional'),
+    ('retail_ecommerce',      'professional'),
+    ('travel_tourism',        'professional'),
+    ('automotive',            'high_value'),
+    ('health_wellness',       'high_value'),
+    ('high_ticket_services',  'high_value'),
+    ('events_entertainment',  'high_value'),
+    ('other_bespoke',         'high_value'),
+    ('logistics_transport',   'high_value'),
+    ('agriculture_farming',   'high_value'),
+    ('real_estate',           'premium'),
+    ('b2b_enterprise',        'premium'),
+    ('financial_services',    'premium'),
+    ('legal_services',        'premium'),
+    ('saas_it',               'premium'),
+    ('franchise_groups',      'premium')
+) AS v(segment_code, tier_code)
+JOIN segments      s ON s.code = v.segment_code
+JOIN pricing_tiers t ON t.tier_code = v.tier_code
+ON CONFLICT (segment_id, start_date) DO NOTHING;
+
+-- =============================================================
+-- 11. Schema Version
+-- =============================================================
+INSERT INTO settings (setting_key, setting_value, setting_type, description)
+VALUES ('schema_version', 1, 'integer',
+        'Loader-expected schema version; compare against EXPECTED_SCHEMA_VERSION')
+ON CONFLICT (setting_key) DO UPDATE
+SET setting_value = EXCLUDED.setting_value,
+    description   = EXCLUDED.description;
+
+-- =============================================================
+-- 12. Ask AI Limits
+-- =============================================================
+INSERT INTO settings (setting_key, setting_value, setting_type, description)
+VALUES ('ask_ai_rate_limit_max', 25, 'integer', 'Max questions per IP for Ask AI')
+ON CONFLICT (setting_key) DO UPDATE SET setting_value = 25;
+
+INSERT INTO settings (setting_key, setting_value, setting_type, description)
+VALUES ('ask_ai_rate_limit_window_minutes', 60, 'integer', 'Time window in minutes for Ask AI rate limit')
+ON CONFLICT (setting_key) DO UPDATE SET setting_value = 60;
+
+INSERT INTO settings (setting_key, setting_value, setting_type, description)
+VALUES ('ask_ai_chunk_limit', 10, 'integer', 'Number of RAG chunks to retrieve from vector search')
+ON CONFLICT (setting_key) DO UPDATE SET setting_value = 10;
+
+-- =============================================================
+-- 13. Website Chat Limits (Added)
+-- =============================================================
+INSERT INTO settings (setting_key, setting_value, setting_type, description)
+VALUES 
+  ('chat_rate_limit_max', 25, 'integer', 'Max messages per IP for Website Chat'),
+  ('chat_rate_limit_window_minutes', 60, 'integer', 'Time window in minutes for Website Chat rate limit')
+ON CONFLICT (setting_key) DO UPDATE 
+SET 
+  setting_value = EXCLUDED.setting_value,
+  setting_type = EXCLUDED.setting_type;
+
+COMMIT;

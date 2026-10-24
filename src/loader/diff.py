@@ -11,7 +11,7 @@ per-column before->after diff in the log. Same implementation, two
 call sites.
 """
 
-from loader.plan import Plan, PlanOp
+from loader.planning.website import Plan, PlanOp
 
 
 def read_state(conn, plan: Plan) -> dict:

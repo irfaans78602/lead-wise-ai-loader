@@ -1,19 +1,24 @@
 """
 log.py
 Writes the per-run log. Every run (preview or commit) produces one
-file. The file is the artifact; stdout is a three-line glance.
+file. The file is the artifact; stdout is a short glance.
 
 Log path:
     {data_root}/logs/{client_slug}/{YYYY-MM-DD-HHMMSS}-{mode}.log
 
 Client slug resolution, in order:
-  1. .client-slug next to the input JSON — a one-line file whose
+  1. .client-slug next to the input JSON -- a one-line file whose
      contents are the slug. Use this when the folder name and the
      slug should differ (e.g. "LeadWiseAI" folder, "leadwise-platform"
      slug).
-  2. First path segment of the input path — the folder name itself.
+  2. Legacy clients/<slug>/ pattern anywhere in the input path.
+  3. First path segment of the input path -- the folder name itself.
      Use this when the folder name is already a valid slug.
-  3. "unknown" — the input file sits at data_root with no subfolder.
+  4. "unknown" -- the input file sits at data_root with no subfolder.
+
+Secrets: columns whose names look sensitive (API keys, connection
+strings, passwords, tokens) and large SVG blobs are written as
+"[redacted]" -- the log records THAT they changed, never the value.
 """
 
 import os
@@ -25,6 +30,17 @@ from pathlib import Path
 # Legacy clients/<slug>/ pattern, kept as a secondary fallback for
 # repos that still use it.
 CLIENT_PATH_RE = re.compile(r"(?:^|/)clients/([^/]+)/")
+
+# Exact column names never written to the log.
+_REDACTED_COLUMNS = frozenset({
+    "gemini_api_key",
+    "db_connect_string",
+    "logo_light_svg",
+    "logo_dark_svg",
+    "favicon_svg",
+})
+# Substrings that mark a column as sensitive.
+_REDACTED_HINTS = ("api_key", "password", "secret", "token", "connect_string")
 
 
 def client_slug(data_root: str, input_path: str) -> str:
@@ -67,23 +83,27 @@ class RunLog:
         self.path = log_dir / f"{ts}-{mode}.log"
         self._fh = self.path.open("w", encoding="utf-8")
         self._t0 = datetime.now(timezone.utc)
+        self._footer_written = False
 
     def _elapsed(self) -> str:
         delta = datetime.now(timezone.utc) - self._t0
         return f"[+{delta.total_seconds():.3f}s]"
 
     def header(self, *, input_path: str, database_url: str,
-               schema_version: int | None, expected_schema_version: int,
+               schema_version: int | None,
+               expected_schema_version: int | None,
                loader_version: str, file_sha256: str):
         started = datetime.now(timezone.utc).isoformat(timespec="milliseconds")
         db_clean = _redact_database_url(database_url)
+        expected = ("unset" if expected_schema_version is None
+                    else str(expected_schema_version))
         self._fh.write("=== load_run ===\n")
         self._fh.write(f"started:     {started}\n")
         self._fh.write(f"mode:        {self.mode}\n")
         self._fh.write(f"input:       {input_path}\n")
         self._fh.write(f"file_sha256: {file_sha256}\n")
         self._fh.write(f"database:    {db_clean}\n")
-        self._fh.write(f"schema_ver:  {schema_version} (expected {expected_schema_version})\n")
+        self._fh.write(f"schema_ver:  {schema_version} (expected {expected})\n")
         self._fh.write(f"loader_ver:  {loader_version}\n\n")
         self._fh.flush()
 
@@ -125,7 +145,10 @@ class RunLog:
                     if diffs:
                         self._fh.write(f"UPDATE    {rid}\n")
                         for col, before, after in diffs:
-                            self._fh.write(f"    {col}: {_fmt(before)}  ->  {_fmt(after)}\n")
+                            self._fh.write(
+                                f"    {col}: {_fmt_col(col, before)}"
+                                f"  ->  {_fmt_col(col, after)}\n"
+                            )
                     else:
                         self._fh.write(f"UNCHANGED {rid}\n")
             self._fh.write("\n")
@@ -138,7 +161,7 @@ class RunLog:
             v = row[col]
             if v is None or v == "":
                 continue
-            self._fh.write(f"{indent}{col}: {_fmt(v)}\n")
+            self._fh.write(f"{indent}{col}: {_fmt_col(col, v)}\n")
 
     def summary(self, counts: dict):
         self._fh.write(f"--- summary ---   {self._elapsed()}\n")
@@ -157,6 +180,9 @@ class RunLog:
         self._fh.write("\n")
 
     def footer(self, *, result: str, exit_code: int):
+        if self._footer_written or self._fh.closed:
+            return
+        self._footer_written = True
         finished = datetime.now(timezone.utc).isoformat(timespec="milliseconds")
         delta = datetime.now(timezone.utc) - self._t0
         self._fh.write(f"result:    {result}\n")
@@ -165,7 +191,8 @@ class RunLog:
         self._fh.write(f"duration:  {delta.total_seconds():.3f}s\n")
 
     def close(self):
-        self._fh.close()
+        if not self._fh.closed:
+            self._fh.close()
 
 
 def file_hash(path: str) -> str:
@@ -197,6 +224,19 @@ def _compare(a, b) -> bool:
     if b is None and a in (None, ""):
         return True
     return a == b
+
+
+def _is_sensitive(col: str) -> bool:
+    c = col.lower()
+    return c in _REDACTED_COLUMNS or any(h in c for h in _REDACTED_HINTS)
+
+
+def _fmt_col(col: str, v) -> str:
+    if v is None:
+        return "NULL"
+    if _is_sensitive(col):
+        return "[redacted]" if v != "" else "(empty)"
+    return _fmt(v)
 
 
 def _fmt(v) -> str:

@@ -1,3 +1,4 @@
+# Python
 __pycache__/
 *.pyc
 *.pyo
@@ -5,9 +6,19 @@ __pycache__/
 build/
 dist/
 .venv/
-.env
 .pytest_cache/
 .mypy_cache/
 .coverage
 htmlcov/
 *.log
+
+# Per-profile env files (contain DB credentials)
+.env
+.env.*
+!.env.example
+
+# Data folder (client JSON contains live credentials: DB URLs, API keys)
+data/
+
+# Run logs
+logs/

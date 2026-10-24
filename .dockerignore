@@ -9,3 +9,11 @@ dist
 tests
 .pytest_cache
 .mypy_cache
+
+# Never bake credentials, data, or logs into the image
+.env
+.env.*
+data
+schema
+logs
+tools

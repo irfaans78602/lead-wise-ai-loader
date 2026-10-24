@@ -1,5 +1,5 @@
 """
-plan.py
+planning/website.py
 Parse a JSON file into a list of PlanOp objects.
 
 A PlanOp is a single row to insert or update. It carries:
@@ -13,53 +13,24 @@ Every op is written as "update if the key exists, else insert"
 (see write.py). There is no require / "new" / "existing" mode, and
 versioned rows are never closed.
 
-The plan module does no I/O beyond reading JSON. It does not touch
-the DB. Preflight resolves lookups against the DB; write executes it.
-
-Pricing
--------
-Pricing lives inside the client it belongs to:
-
-    "clients": [ { "client_key": "...", ..., "pricing": {
-        "volume_discounts": [...],
-        "agency_tier_discounts": [...],
-        "negotiated_discounts": [...]
-    } } ]
-
-The parent client's client_id is attached to "volume" and "negotiated"
-rows. "agency_tier" rows are platform-wide (the schema requires
-client_id NULL). A top-level "pricing" block is no longer read.
-
-Cross-file client refs
-----------------------
-A file that carries only ad / matrix data can reference a client that
-was loaded from a *different* file by name. Because client UUIDs are
-deterministic (`derive("client", client_key)`), the loader computes the
-same UUID the earlier file wrote. If the client was never loaded, the
-FK on ads.client_id fails at write time.
-
-Encoding
---------
-Input JSON is read as UTF-8. Message text, question text and option
-labels carry per-locale strings (ar / fr / es / zh / ...), so the file
-is never ASCII-only. On Windows, Path.read_text() defaults to the
-system locale codec, which cannot decode Arabic; the explicit
-encoding="utf-8" here is required, not cosmetic.
+This module also holds the helpers shared by all three planners
+(Plan, PlanOp, read_json, require, resolve_client_id).
 """
 
 import json
+import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from loader import entities
+from loader.entities import website as entities
 from loader.errors import FileError
 from loader.uuid_gen import derive
 
 
 @dataclass
 class PlanOp:
-    spec: entities.EntitySpec
+    spec: Any
     pk: Any
     payload: dict[str, Any]
     logical_key: tuple
@@ -76,8 +47,11 @@ class Plan:
 
 
 # ---------------------------------------------------------------------
+# Helpers shared by every planner
+# ---------------------------------------------------------------------
 
-def load_plan(json_path: str, data_root: str) -> Plan:
+def read_json(json_path: str, data_root: str) -> Any:
+    """Read and parse an input file; every failure becomes FileError."""
     path = Path(data_root) / json_path
     if not path.exists():
         raise FileError(f"input file not found: {path}")
@@ -92,19 +66,56 @@ def load_plan(json_path: str, data_root: str) -> Plan:
     except json.JSONDecodeError as e:
         raise FileError(f"invalid JSON in {path}: {e}") from e
 
+    if not isinstance(payload, (dict, list)):
+        raise FileError(
+            f"top level of {path} must be a JSON object or array, "
+            f"got {type(payload).__name__}"
+        )
+    return payload
+
+
+def require(obj: dict, key: str, where: str):
+    """obj[key], or a FileError that says where it was missing."""
+    if key not in obj or obj[key] is None:
+        raise FileError(f"{where}: missing required field '{key}'")
+    return obj[key]
+
+
+def resolve_client_id(client: dict, where: str = "clients"):
+    """
+    Same rule for every profile: an explicit client_id (a UUID string)
+    wins; otherwise derive it from client_key.
+    """
+    explicit = client.get("client_id")
+    if explicit:
+        try:
+            return uuid.UUID(str(explicit))
+        except ValueError as e:
+            raise FileError(
+                f"{where}: client_id {explicit!r} is not a valid UUID"
+            ) from e
+    key = require(client, "client_key", where)
+    return derive("client", key)
+
+
+# ---------------------------------------------------------------------
+
+def load_plan(json_path: str, data_root: str) -> Plan:
+    payload = read_json(json_path, data_root)
     plan = Plan()
-    _plan_payload(payload, plan, source=str(path))
+    
+    # Handle bare object (single client) 
+    if isinstance(payload, dict) and "client_key" in payload and "settings" not in payload:
+        payload = {"clients": [payload]}
+
+    _plan_payload(payload, plan, source=str(Path(data_root) / json_path))
     return plan
 
 
 def _plan_payload(payload: dict, plan: Plan, source: str):
-    # Clients first (this also plans each client's messages and pricing).
     for client in payload.get("clients", []):
         _plan_client(client, plan, source)
 
-    # client_users come after clients so optional client_key refs
-    # resolve. Users without a client_key are planned with client_id
-    # absent and land with NULL, to be linked manually later.
     for user in payload.get("client_users", []):
         _plan_client_user(user, plan, source)
 
@@ -118,12 +129,6 @@ def _plan_payload(payload: dict, plan: Plan, source: str):
 
 
 def _resolve_client_ref(plan: Plan, client_key: str):
-    """
-    Return the client_id for client_key. If the client was planned in
-    this same file, use that. Otherwise derive the UUID a prior load
-    of 10-clients.json would have produced - the derivation is
-    deterministic, so both runs agree.
-    """
     client_id = plan.refs.get(("client", client_key))
     if client_id is None:
         client_id = derive("client", client_key)
@@ -131,14 +136,10 @@ def _resolve_client_ref(plan: Plan, client_key: str):
     return client_id
 
 
-# ---------------------------------------------------------------------
-# clients
-# ---------------------------------------------------------------------
-
 def _plan_client(client: dict, plan: Plan, source: str):
     spec = entities.CLIENTS
-    key = client["client_key"]
-    client_id = derive("client", key)
+    key = require(client, "client_key", "clients")
+    client_id = resolve_client_id(client, f"clients[{key}]")
     plan.refs[("client", key)] = client_id
 
     payload = {"client_id": client_id}
@@ -182,10 +183,6 @@ def _plan_client_message(client_id, client_key, msg, plan, source):
     ))
 
 
-# ---------------------------------------------------------------------
-# pricing (nested under a client)
-# ---------------------------------------------------------------------
-
 def _plan_client_pricing(client_id, client_key, pricing, plan, source):
     for group in ("volume_discounts", "agency_tier_discounts",
                   "negotiated_discounts"):
@@ -195,22 +192,6 @@ def _plan_client_pricing(client_id, client_key, pricing, plan, source):
 
 def _plan_pricing_discount(client_id, client_key, row: dict,
                            plan: Plan, source: str):
-    """
-    The schema's CHECK on pricing_discounts fixes which columns each
-    discount_type may carry:
-
-      volume       client_id optional (set to the parent client);
-                   country_id, segment_id, field_name NULL;
-                   leads_min/leads_max required.
-      agency_tier  client_id NULL; country_id (country_code) set;
-                   leads_min/leads_max required.
-      negotiated   client_id set (the parent client); segment_id
-                   (segment_code), field_name and reason required;
-                   leads_min/leads_max NULL.
-
-    The parent's client_id is attached to volume and negotiated rows.
-    agency_tier rows stay platform-wide (client_id NULL).
-    """
     spec = entities.PRICING_DISCOUNTS
     dtype = row["discount_type"]
 
@@ -226,9 +207,9 @@ def _plan_pricing_discount(client_id, client_key, row: dict,
     }
 
     if row.get("country_code"):
-        payload["country_id"] = row["country_code"]      # resolved in preflight
+        payload["country_id"] = row["country_code"]
     if row.get("segment_code"):
-        payload["segment_id"] = row["segment_code"]      # resolved in preflight
+        payload["segment_id"] = row["segment_code"]
     if row.get("field_name"):
         payload["field_name"] = row["field_name"]
 
@@ -264,13 +245,9 @@ def _plan_pricing_discount(client_id, client_key, row: dict,
     ))
 
 
-# ---------------------------------------------------------------------
-# client_users
-# ---------------------------------------------------------------------
-
 def _plan_client_user(user: dict, plan: Plan, source: str):
     spec = entities.CLIENT_USERS
-    google_sub = user["google_sub"]
+    google_sub = require(user, "google_sub", "client_users")
 
     if ("client_user", google_sub) in plan.refs:
         raise FileError(
@@ -289,9 +266,6 @@ def _plan_client_user(user: dict, plan: Plan, source: str):
             f"client_users[{google_sub}]: 'email' is required"
         )
 
-    # Optional linkage. Absent client_key => row is written with
-    # client_id = NULL and linked later by hand. When present, the key
-    # string copied above is replaced by the client's UUID.
     client_key = user.get("client_key")
     if client_key is not None:
         client_id = plan.refs.get(("client", client_key))
@@ -311,17 +285,15 @@ def _plan_client_user(user: dict, plan: Plan, source: str):
     ))
 
 
-# ---------------------------------------------------------------------
-# ads
-# ---------------------------------------------------------------------
-
 def _plan_root_ad(root: dict, plan: Plan, source: str):
-    client_id = _resolve_client_ref(plan, root["client_key"])
+    client_id = _resolve_client_ref(
+        plan, require(root, "client_key", "root_ad")
+    )
 
     _plan_ad(
         {
-            "source_ad_id": root["source_ad_id"],
-            "ad_name": root["ad_name"],
+            "source_ad_id": require(root, "source_ad_id", "root_ad"),
+            "ad_name": require(root, "ad_name", "root_ad"),
             "is_placeholder": root.get("is_placeholder", True),
             "language_code": root.get("language_code"),
             "reopen_policy": root.get("reopen_policy"),
@@ -346,23 +318,35 @@ def _plan_root_ad(root: dict, plan: Plan, source: str):
                                   plan, source)
 
 
-def _plan_ad_matrix(matrix: dict, plan: Plan, source: str):
-    client_id = _resolve_client_ref(plan, matrix["client_key"])
+def _format_pattern(pattern: str, where: str, **values) -> str:
+    try:
+        return pattern.format(**values)
+    except (KeyError, IndexError) as e:
+        raise FileError(
+            f"ad_matrix.{where}: unknown placeholder {e} in "
+            f"{pattern!r}; allowed: {', '.join(sorted(values))}"
+        ) from e
 
-    root_source_id = matrix["reuse_root"]
+
+def _plan_ad_matrix(matrix: dict, plan: Plan, source: str):
+    client_id = _resolve_client_ref(
+        plan, require(matrix, "client_key", "ad_matrix")
+    )
+
+    root_source_id = require(matrix, "reuse_root", "ad_matrix")
     if ("ad", root_source_id) not in plan.refs:
         raise FileError(
             f"ad_matrix.reuse_root '{root_source_id}' has not been planned; "
             f"root_ad must come before ad_matrix"
         )
 
-    channels = matrix["channels"]
-    locales = matrix["locales"]
+    channels = require(matrix, "channels", "ad_matrix")
+    locales = require(matrix, "locales", "ad_matrix")
     exclude = set(matrix.get("exclude", []))
     overrides = matrix.get("overrides", {})
 
-    id_pattern = matrix["source_ad_id_pattern"]
-    name_pattern = matrix["ad_name_pattern"]
+    id_pattern = require(matrix, "source_ad_id_pattern", "ad_matrix")
+    name_pattern = require(matrix, "ad_name_pattern", "ad_matrix")
 
     for ch in channels:
         for loc in locales:
@@ -370,8 +354,14 @@ def _plan_ad_matrix(matrix: dict, plan: Plan, source: str):
             if key in exclude:
                 continue
 
-            source_id = id_pattern.format(channel=ch["code"], locale=loc)
-            name = name_pattern.format(channel_name=ch["name"], locale=loc)
+            source_id = _format_pattern(
+                id_pattern, "source_ad_id_pattern",
+                channel=ch["code"], locale=loc,
+            )
+            name = _format_pattern(
+                name_pattern, "ad_name_pattern",
+                channel_name=ch["name"], locale=loc,
+            )
 
             if key in overrides:
                 o = overrides[key]
@@ -409,8 +399,6 @@ def _plan_ad(ad: dict, client_id, plan: Plan, source: str):
     if ad.get("reopen_policy"):
         payload["reopen_policy"] = ad["reopen_policy"]
     if ad.get("reuse_root"):
-        # FK to an already-planned ad; the root is planned earlier in
-        # the same file.
         payload["reuse_ad_id"] = derive("ad", ad["reuse_root"])
 
     plan.add(PlanOp(

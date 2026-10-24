@@ -41,7 +41,6 @@ CLIENTS = EntitySpec(
         "logo_version":       "logo_version",
         "logo_updated_at":    "logo_updated_at",
         "allowed_origins":    "allowed_origins",
-        "gemini_api_key":     "gemini_api_key",
         "scope":              "scope",
         "retention_days":     "retention_days",
     },

@@ -1,0 +1,44 @@
+I am considering the Neon Agent Plan to support a scalable, database-per-client architecture. I would appreciate your guidance on implementing custom resource tiers for my customers.
+
+1. Proposed architecture
+
+My intention is to provision a separate Neon project and PostgreSQL database for each client. Each client's database would contain:
+
+- RAG document chunks and vector embeddings using pgvector.
+- Client FAQs and chatbot configuration.
+- Chatbot conversation and message history.
+- Lead qualification results and related records, where appropriate.
+
+2. Proposed customer tiers
+
+I plan to offer ten commercial tiers based primarily on the number of RAG embeddings:
+
+Tier| Maximum embeddings
+Nano| 10,000
+Micro| 25,000
+Starter| 50,000
+Basic| 100,000
+Standard| 250,000
+Growth| 500,000
+Professional| 1,000,000
+Business| 2,500,000
+Enterprise| 5,000,000
+Enterprise Plus| 10,000,000
+
+These are my own product tiers, not proposed Neon plan names. I intend to define separate compute, storage and usage limits for each tier.
+
+3. Questions about implementation
+
+I would appreciate clarification on the following:
+
+1. Can the Neon Agent Plan support this database-per-client architecture at scale?
+2. Can I programmatically create a Neon project for each client through the Neon API?
+3. Can I configure per-project compute limits, storage controls and monthly usage quotas through the API?
+4. Which resource limits can be enforced automatically, and which require application-level monitoring?
+5. Can I set different compute and storage allowances for each of my ten customer tiers?
+6. What happens when a client reaches their allocated resource limits? Can usage be restricted without unexpectedly interrupting other clients?
+7. What are the practical project limits, provisioning limits and recommended architecture for a platform expecting hundreds or thousands of client databases?
+8. Could you clarify the Agent Plan's eligibility requirements, pricing, credit arrangements and any minimum commitments?
+9. Is there a recommended approach for monitoring per-client costs and automatically upgrading or downgrading resource allocations when a customer changes tiers?
+
+My objective is to retain PostgreSQL and pgvector for RAG, FAQs and conversations while providing appropriate resource controls and predictable operating costs as Lead Wise AI grows.

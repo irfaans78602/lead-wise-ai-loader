@@ -11,6 +11,9 @@ class EntitySpec:
     version_key: tuple[str, ...] = ()
     columns: dict[str, str] = field(default_factory=dict)
     parent_refs: dict[str, tuple[str, str]] = field(default_factory=dict)
+    # Columns written on INSERT only. On conflict they are left as they
+    # are in the database (for example counters the platform maintains).
+    insert_only: tuple[str, ...] = ()
 
 from loader.entities import website, master, rag  # noqa: E402
 

@@ -24,8 +24,11 @@ Folder: C:\Irfaan\leadwiseai\lead-wise-ai-loader
 |   |   +---00-master-drop.sql
 |   |   \---10-master-schema.sql
 |   +---rag
+|   |   +---updates
+|   |   |   \---logo_and_favicon_update.sql
 |   |   +---00-rag-drop.sql
-|   |   \---10-rag-schema.sql
+|   |   +---10-rag-schema.sql
+|   |   \---neon tiers.txt
 |   \---website
 |       +---00-lead-wise-ai-drop.sql
 |       +---10-lead-wise-ai-schema.sql

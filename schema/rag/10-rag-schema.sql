@@ -35,11 +35,14 @@ CREATE TABLE clients (
     font_family         TEXT NOT NULL DEFAULT 'inter',
     density             TEXT CHECK (density IN ('compact', 'comfortable', 'spacious')),
     dark_mode           TEXT NOT NULL DEFAULT 'auto' CHECK (dark_mode IN ('on', 'off', 'auto')),
-    logo_light_svg      TEXT NOT NULL,
+    
+    -- CHANGED: Removed NOT NULL from logo_light_svg
+    logo_light_svg      TEXT,
     logo_dark_svg       TEXT,
     favicon_svg         TEXT,
     logo_light_alt      TEXT,
     logo_dark_alt       TEXT,
+    
     logo_version        INTEGER NOT NULL DEFAULT 1,
     logo_updated_at     TIMESTAMPTZ,
     allowed_origins     TEXT NOT NULL DEFAULT '',

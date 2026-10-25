@@ -53,4 +53,24 @@ SETTINGS = EntitySpec(
     },
 )
 
-ALL = {spec.name: spec for spec in (CLIENTS, INSTANCES, SETTINGS)}
+# One subscription row per client (client_id is both PK and FK).
+# JSON: client["subscription"] = {tier_id, neon_project_id,
+#                                 current_embeddings, subscription_status}
+# current_embeddings is a live counter maintained by the platform, so the
+# loader only sets it when the row is first created and never resets it.
+SUBSCRIPTIONS = EntitySpec(
+    name="subscriptions",
+    table="client_subscriptions",
+    pk_col="client_id",
+    pk_kind="subscription",
+    natural_key=("client_id",),
+    columns={
+        "tier_id":             "tier_id",
+        "neon_project_id":     "neon_project_id",
+        "current_embeddings":  "current_embeddings",
+        "subscription_status": "subscription_status",
+    },
+    insert_only=("current_embeddings",),
+)
+
+ALL = {spec.name: spec for spec in (CLIENTS, SUBSCRIPTIONS, INSTANCES, SETTINGS)}

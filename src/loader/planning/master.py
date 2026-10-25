@@ -40,6 +40,11 @@ def load_plan(json_path: str, data_root: str) -> Plan:
             source_path=json_path,
         ))
 
+        subscription = client.get("subscription")
+        if subscription:
+            _plan_subscription(client_id, client_key, subscription,
+                               plan, json_path)
+
         for inst in client.get("instances", []):
             _plan_instance(client_id, client_key, inst, plan, json_path)
 
@@ -47,6 +52,34 @@ def load_plan(json_path: str, data_root: str) -> Plan:
         _plan_setting(s, plan, json_path)
 
     return plan
+
+
+def _plan_subscription(client_id, client_key, sub, plan, source):
+    where = f"clients[{client_key}].subscription"
+    if not isinstance(sub, dict):
+        raise FileError(f"{where}: must be an object")
+    require(sub, "tier_id", where)
+
+    embeddings = sub.get("current_embeddings")
+    if embeddings is not None:
+        if isinstance(embeddings, bool) or not isinstance(embeddings, int) \
+                or embeddings < 0:
+            raise FileError(
+                f"{where}: current_embeddings must be a whole number "
+                f">= 0, got {embeddings!r}"
+            )
+
+    row = {"client_id": client_id}
+    for json_field, pg_col in E.SUBSCRIPTIONS.columns.items():
+        if json_field in sub:
+            row[pg_col] = sub[json_field]
+    plan.add(PlanOp(
+        spec=E.SUBSCRIPTIONS,
+        pk=client_id,
+        payload=row,
+        logical_key=(client_key, "subscription"),
+        source_path=source,
+    ))
 
 
 def _plan_instance(client_id, client_key, inst, plan, source):

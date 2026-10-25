@@ -77,6 +77,9 @@ def _hint(op: PlanOp) -> str:
         return p.get("email", "")
     if table == "instances":
         return p.get("instance_type", "")
+    if table == "client_subscriptions":
+        return (f"tier={p.get('tier_id', '')} "
+                f"status={p.get('subscription_status', '')}").rstrip()
     if table == "settings":
         return p.get("setting_type", "") or ""
     return ""
@@ -105,7 +108,8 @@ def _upsert_by_pk(conn, op: PlanOp) -> str:
     cols = list(op.payload.keys())
     values = [_serialize(op.payload[c]) for c in cols]
 
-    update_cols = [c for c in cols if c != spec.pk_col]
+    update_cols = [c for c in cols
+                   if c != spec.pk_col and c not in spec.insert_only]
     update_clause = ", ".join(f"{c} = EXCLUDED.{c}" for c in update_cols) \
         or f"{spec.pk_col} = EXCLUDED.{spec.pk_col}"
 

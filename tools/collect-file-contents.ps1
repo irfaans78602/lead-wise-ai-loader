@@ -64,7 +64,8 @@ $ExcludedFolders = @(
     '.git'
 )
 
-$ExcludedExtensions = @('log')
+# CHANGED: Added 'env' to exclude .env files completely
+$ExcludedExtensions = @('log', 'env')
 
 $AllowedExtensions = @(
     'js', 'mjs', 'cjs', 'ts', 'cts', 'mts', 'd.ts',
@@ -80,8 +81,9 @@ $AllowedExtensions = @(
 $NoExtensionAllowList = @()
 
 # Real .env files (never shared outside the team) vs. committed templates.
+# CHANGED: Removed '.env' from this list
 $RealEnvNames = @(
-    '.env', '.env.master', '.env.rag', '.env.leadwise', '.env.loader'
+    '.env.master', '.env.rag', '.env.leadwise', '.env.loader'
 )
 $EnvExamplePattern = '.env.*.example'
 

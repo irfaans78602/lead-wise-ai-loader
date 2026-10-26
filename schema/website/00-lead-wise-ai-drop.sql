@@ -28,7 +28,7 @@ DROP VIEW IF EXISTS active_pricing_website         CASCADE;
 DROP VIEW IF EXISTS active_pricing_rates           CASCADE;
 DROP VIEW IF EXISTS active_pricing_segment_tiers   CASCADE;
 DROP VIEW IF EXISTS active_pricing_tiers           CASCADE;
-DROP VIEW IF EXISTS active_settings                CASCADE;
+DROP VIEW IF EXISTS active_settings                CASCADE; -- Dropping just in case it existed previously
 DROP VIEW IF EXISTS active_messages                CASCADE;
 DROP VIEW IF EXISTS active_segments                CASCADE;
 DROP VIEW IF EXISTS active_countries               CASCADE;
@@ -107,7 +107,7 @@ DROP TABLE IF EXISTS languages                CASCADE;
 
 -- Standalone
 DROP TABLE IF EXISTS messages                 CASCADE;
-DROP TABLE IF EXISTS settings                 CASCADE;
+DROP TABLE IF EXISTS settings                 CASCADE; -- Remove from Website DB
 DROP TABLE IF EXISTS pricing_tiers            CASCADE;
 
 COMMIT;

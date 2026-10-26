@@ -1,20 +1,6 @@
 """
 planning/website.py
 Parse a JSON file into a list of PlanOp objects.
-
-A PlanOp is a single row to insert or update. It carries:
-  - spec:             EntitySpec
-  - pk:               the derived primary key (UUID or natural)
-  - payload:          dict of PG column -> value
-  - logical_key:      tuple identifying the row for error messages
-  - source_path:      file location, for error context
-
-Every op is written as "update if the key exists, else insert"
-(see write.py). There is no require / "new" / "existing" mode, and
-versioned rows are never closed.
-
-This module also holds the helpers shared by all three planners
-(Plan, PlanOp, read_json, require, resolve_client_id).
 """
 
 import json
@@ -51,7 +37,6 @@ class Plan:
 # ---------------------------------------------------------------------
 
 def read_json(json_path: str, data_root: str) -> Any:
-    """Read and parse an input file; every failure becomes FileError."""
     path = Path(data_root) / json_path
     if not path.exists():
         raise FileError(f"input file not found: {path}")
@@ -75,17 +60,12 @@ def read_json(json_path: str, data_root: str) -> Any:
 
 
 def require(obj: dict, key: str, where: str):
-    """obj[key], or a FileError that says where it was missing."""
     if key not in obj or obj[key] is None:
         raise FileError(f"{where}: missing required field '{key}'")
     return obj[key]
 
 
 def resolve_client_id(client: dict, where: str = "clients"):
-    """
-    Same rule for every profile: an explicit client_id (a UUID string)
-    wins; otherwise derive it from client_key.
-    """
     explicit = client.get("client_id")
     if explicit:
         try:
@@ -143,6 +123,8 @@ def _plan_client(client: dict, plan: Plan, source: str):
     plan.refs[("client", key)] = client_id
 
     payload = {"client_id": client_id}
+    
+    # This loop automatically picks up 'sms_numbers' because it's in spec.columns
     for json_field, pg_col in spec.columns.items():
         if json_field in client:
             payload[pg_col] = client[json_field]
@@ -295,6 +277,7 @@ def _plan_root_ad(root: dict, plan: Plan, source: str):
             "source_ad_id": require(root, "source_ad_id", "root_ad"),
             "ad_name": require(root, "ad_name", "root_ad"),
             "is_placeholder": root.get("is_placeholder", True),
+            "sms_numbers": root.get("sms_numbers", {}), # ADDED
             "language_code": root.get("language_code"),
             "reopen_policy": root.get("reopen_policy"),
             "reuse_root": None,
@@ -373,6 +356,7 @@ def _plan_ad_matrix(matrix: dict, plan: Plan, source: str):
                     "source_ad_id": source_id,
                     "ad_name": name,
                     "is_placeholder": matrix.get("is_placeholder", True),
+                    "sms_numbers": matrix.get("sms_numbers", {}), # ADDED
                     "language_code": loc,
                     "reuse_root": root_source_id,
                 },
@@ -394,6 +378,8 @@ def _plan_ad(ad: dict, client_id, plan: Plan, source: str):
         "ad_name": ad["ad_name"],
         "is_placeholder": ad.get("is_placeholder", True),
     }
+    if ad.get("sms_numbers"):
+        payload["sms_numbers"] = ad["sms_numbers"]
     if ad.get("language_code"):
         payload["language_id"] = ad["language_code"]
     if ad.get("reopen_policy"):

@@ -98,25 +98,7 @@ CREATE INDEX messages_code_idx   ON messages (message_code);
 CREATE INDEX messages_active_idx ON messages (start_date, end_date);
 
 -- =============================================================
--- 6. Settings
--- =============================================================
-CREATE TABLE settings (
-    setting_id     BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    setting_key    TEXT NOT NULL UNIQUE,
-    setting_value  NUMERIC(10,4) NOT NULL,
-    setting_type   TEXT NOT NULL DEFAULT 'number'
-                   CHECK (setting_type IN ('number','boolean','integer')),
-    description    TEXT,
-    start_date     DATE NOT NULL DEFAULT '1900-01-01',
-    end_date       DATE NOT NULL DEFAULT '9999-12-31',
-    updated_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
-    CHECK (start_date <= end_date)
-);
-
-CREATE INDEX settings_active_idx ON settings (start_date, end_date);
-
--- =============================================================
--- 7. Pricing Tiers
+-- 6. Pricing Tiers
 -- =============================================================
 CREATE TABLE pricing_tiers (
     tier_id       SMALLINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -134,7 +116,7 @@ CREATE TABLE pricing_tiers (
 CREATE INDEX pricing_tiers_active_idx ON pricing_tiers (start_date, end_date);
 
 -- =============================================================
--- 8. Pricing Segment Tiers
+-- 7. Pricing Segment Tiers
 -- =============================================================
 CREATE TABLE pricing_segment_tiers (
     segment_tier_id  BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -152,7 +134,7 @@ CREATE INDEX pricing_segment_tiers_tier_idx    ON pricing_segment_tiers (tier_id
 CREATE INDEX pricing_segment_tiers_active_idx  ON pricing_segment_tiers (start_date, end_date);
 
 -- =============================================================
--- 9. Pricing Rates
+-- 8. Pricing Rates
 -- =============================================================
 CREATE TABLE pricing_rates (
     rate_id          BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -178,7 +160,7 @@ CREATE INDEX pricing_rates_country_idx  ON pricing_rates (country_id);
 CREATE INDEX pricing_rates_active_idx   ON pricing_rates (start_date, end_date);
 
 -- =============================================================
--- 10. Pricing Website
+-- 9. Pricing Website
 -- =============================================================
 CREATE TABLE pricing_website (
     website_pricing_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -198,7 +180,7 @@ CREATE INDEX pricing_website_country_idx ON pricing_website (country_id);
 CREATE INDEX pricing_website_active_idx  ON pricing_website (start_date, end_date);
 
 -- =============================================================
--- 11. Pricing Addons
+-- 10. Pricing Addons
 -- =============================================================
 CREATE TABLE pricing_addons (
     addon_id             BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -242,7 +224,7 @@ CREATE INDEX pricing_addons_country_idx ON pricing_addons (country_id);
 CREATE INDEX pricing_addons_active_idx  ON pricing_addons (start_date, end_date);
 
 -- =============================================================
--- 12. Agencies
+-- 11. Agencies
 -- =============================================================
 CREATE TABLE agencies (
     agency_id         UUID PRIMARY KEY,
@@ -262,7 +244,7 @@ CREATE INDEX agencies_parent_idx ON agencies (parent_agency_id);
 CREATE INDEX agencies_active_idx ON agencies (start_date, end_date);
 
 -- =============================================================
--- 13. Clients
+-- 12. Clients
 -- =============================================================
 CREATE TABLE clients (
     client_id            UUID PRIMARY KEY,
@@ -270,6 +252,7 @@ CREATE TABLE clients (
     email_to             TEXT NOT NULL,
     email_cc             TEXT,
     email_bcc            TEXT,
+    sms_numbers          JSONB NOT NULL DEFAULT '{}'::jsonb, -- ADDED
     agency_id            UUID REFERENCES agencies(agency_id) ON DELETE SET NULL,
     country_id           SMALLINT REFERENCES countries(country_id) ON DELETE RESTRICT,
     segment_id           SMALLINT REFERENCES segments(segment_id) ON DELETE RESTRICT,
@@ -302,13 +285,14 @@ CREATE INDEX clients_agency_idx  ON clients (agency_id);
 CREATE INDEX clients_country_idx ON clients (country_id);
 CREATE INDEX clients_segment_idx ON clients (segment_id);
 CREATE INDEX clients_active_idx  ON clients (start_date, end_date);
+CREATE INDEX clients_sms_numbers_idx ON clients USING gin (sms_numbers);
 
 CREATE UNIQUE INDEX clients_one_platform_owner
     ON clients ((is_platform_owner))
     WHERE is_platform_owner = TRUE;
 
 -- =============================================================
--- 14. Pricing Discounts
+-- 13. Pricing Discounts
 -- =============================================================
 CREATE TABLE pricing_discounts (
     pricing_discount_id  BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -389,7 +373,7 @@ CREATE UNIQUE INDEX pricing_discounts_client_field_unique
     WHERE client_id IS NOT NULL AND field_name IS NOT NULL AND end_date = '9999-12-31';
 
 -- =============================================================
--- 15. Client Messages - VERSIONED
+-- 14. Client Messages - VERSIONED
 -- =============================================================
 CREATE TABLE client_messages (
     client_message_id   UUID PRIMARY KEY,
@@ -412,7 +396,7 @@ CREATE UNIQUE INDEX client_messages_current_unique
     WHERE end_date = '9999-12-31';
 
 -- =============================================================
--- 16. Ads - STABLE IDENTITY + CONFIG, NOT VERSIONED
+-- 15. Ads - STABLE IDENTITY + CONFIG, NOT VERSIONED
 -- =============================================================
 CREATE TABLE ads (
     ad_id               UUID PRIMARY KEY,
@@ -423,6 +407,7 @@ CREATE TABLE ads (
     email_to            TEXT,
     email_cc            TEXT,
     email_bcc           TEXT,
+    sms_numbers         JSONB NOT NULL DEFAULT '{}'::jsonb, -- ADDED
     reuse_ad_id         UUID REFERENCES ads(ad_id) ON DELETE RESTRICT,
     language_id         SMALLINT REFERENCES languages(language_id) ON DELETE RESTRICT,
     reopen_policy       TEXT
@@ -441,9 +426,10 @@ CREATE INDEX ads_reuse_ad_idx    ON ads (reuse_ad_id);
 CREATE INDEX ads_active_idx      ON ads (start_date, end_date);
 CREATE INDEX ads_language_idx    ON ads (language_id);
 CREATE INDEX ads_placeholder_idx ON ads (client_id, is_placeholder) WHERE is_placeholder = TRUE;
+CREATE INDEX ads_sms_numbers_idx ON ads USING gin (sms_numbers);
 
 -- =============================================================
--- 17. Ad Confirmations - VERSIONED
+-- 16. Ad Confirmations - VERSIONED
 -- =============================================================
 CREATE TABLE ad_confirmations (
     ad_confirmation_id  UUID PRIMARY KEY,
@@ -466,7 +452,7 @@ CREATE UNIQUE INDEX ad_confirmations_current_unique
     WHERE end_date = '9999-12-31';
 
 -- =============================================================
--- 18. Ad Reopen Prompts - VERSIONED
+-- 17. Ad Reopen Prompts - VERSIONED
 -- =============================================================
 CREATE TABLE ad_reopen_prompts (
     ad_reopen_prompt_id   UUID PRIMARY KEY,
@@ -493,7 +479,7 @@ CREATE UNIQUE INDEX ad_reopen_prompts_current_unique
     WHERE end_date = '9999-12-31';
 
 -- =============================================================
--- 19. FAQs - VERSIONED
+-- 18. FAQs - VERSIONED
 -- =============================================================
 CREATE TABLE faqs (
     faq_id           UUID PRIMARY KEY,
@@ -544,7 +530,7 @@ CREATE UNIQUE INDEX faqs_current_order_unique
     WHERE end_date = '9999-12-31';
 
 -- =============================================================
--- 20. Customers - RUNTIME
+-- 19. Customers - RUNTIME
 -- =============================================================
 CREATE TABLE customers (
     customer_id          BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -571,7 +557,7 @@ CREATE INDEX customers_qualification_idx ON customers (qualification_id);
 CREATE INDEX idx_customers_ip_hash       ON customers (ip_hash);
 
 -- =============================================================
--- 21. Conversations - RUNTIME
+-- 20. Conversations - RUNTIME
 -- =============================================================
 CREATE TABLE conversations (
     conversation_id                 BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -593,7 +579,7 @@ CREATE INDEX conversations_state_idx    ON conversations (state);
 CREATE INDEX conversations_language_idx ON conversations (language_id);
 
 -- =============================================================
--- 22. Answers - RUNTIME
+-- 21. Answers - RUNTIME
 -- =============================================================
 CREATE TABLE answers (
     answer_id        BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -611,7 +597,7 @@ CREATE INDEX answers_conversation_idx ON answers (conversation_id);
 CREATE INDEX answers_faq_idx          ON answers (faq_id);
 
 -- =============================================================
--- 23. Qualification Levels
+-- 22. Qualification Levels
 -- =============================================================
 CREATE TABLE qualification_levels (
     qualification_level_id SMALLINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -630,7 +616,7 @@ CREATE INDEX qualification_levels_language_idx ON qualification_levels (language
 CREATE INDEX qualification_levels_active_idx   ON qualification_levels (start_date, end_date);
 
 -- =============================================================
--- 24. Qualification Score - VERSIONED
+-- 23. Qualification Score - VERSIONED
 -- =============================================================
 CREATE TABLE qualification_score (
     qualification_score_id  UUID PRIMARY KEY,
@@ -665,7 +651,7 @@ ALTER TABLE customers
     ON DELETE SET NULL;
 
 -- =============================================================
--- 25. Qualifications - RUNTIME
+-- 24. Qualifications - RUNTIME
 -- =============================================================
 CREATE TABLE qualifications (
     qualification_event_id  BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -684,7 +670,7 @@ CREATE INDEX qualifications_ad_idx           ON qualifications (ad_id, qualified
 CREATE INDEX qualifications_qualified_at_idx ON qualifications (qualified_at);
 
 -- =============================================================
--- 26. Client Users
+-- 25. Client Users
 -- =============================================================
 CREATE TABLE client_users (
     client_user_id       BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -709,7 +695,7 @@ CREATE INDEX client_users_email_idx  ON client_users (lower(email));
 CREATE INDEX client_users_active_idx ON client_users (client_id, start_date, end_date);
 
 -- =============================================================
--- 27. Agency Users
+-- 26. Agency Users
 -- =============================================================
 CREATE TABLE agency_users (
     agency_user_id       BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -734,7 +720,7 @@ CREATE INDEX agency_users_email_idx  ON agency_users (lower(email));
 CREATE INDEX agency_users_active_idx ON agency_users (agency_id, start_date, end_date);
 
 -- =============================================================
--- 28. Customer Statuses - RUNTIME
+-- 27. Customer Statuses - RUNTIME
 -- =============================================================
 CREATE TABLE customer_statuses (
     customer_status_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -757,7 +743,7 @@ CREATE INDEX customer_statuses_client_user_idx ON customer_statuses (client_user
 CREATE INDEX customer_statuses_agency_user_idx ON customer_statuses (agency_user_id);
 
 -- =============================================================
--- 29. Message Rate Limits
+-- 28. Message Rate Limits
 -- =============================================================
 CREATE TABLE message_rate_limits (
     channel          TEXT NOT NULL,
@@ -772,7 +758,7 @@ CREATE TABLE message_rate_limits (
 CREATE INDEX message_rate_limits_cleanup_idx ON message_rate_limits (window_start);
 
 -- =============================================================
--- 30. Invoice Payments
+-- 29. Invoice Payments
 -- =============================================================
 CREATE TABLE invoice_payments (
     invoice_payment_id    BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -820,7 +806,7 @@ CREATE UNIQUE INDEX invoice_payments_one_per_period
     ON invoice_payments (client_id, billing_period_start, billing_period_end);
 
 -- =============================================================
--- 31. Contacts - RUNTIME, APPEND-ONLY
+-- 30. Contacts - RUNTIME, APPEND-ONLY
 -- =============================================================
 CREATE TABLE contacts (
     contact_id      BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -851,7 +837,7 @@ CREATE INDEX contacts_ip_hash_idx    ON contacts (ip_hash) WHERE ip_hash IS NOT 
 CREATE INDEX contacts_enquiry_idx    ON contacts (enquiry) WHERE enquiry IS NOT NULL;
 
 -- =============================================================
--- 32. Triggers
+-- 31. Triggers
 -- =============================================================
 CREATE OR REPLACE FUNCTION set_updated_at()
 RETURNS TRIGGER AS $$
@@ -877,10 +863,6 @@ CREATE TRIGGER agency_users_updated_at
     BEFORE UPDATE ON agency_users
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
-CREATE TRIGGER settings_updated_at
-    BEFORE UPDATE ON settings
-    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-
 CREATE TRIGGER invoice_payments_updated_at
     BEFORE UPDATE ON invoice_payments
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();
@@ -901,7 +883,7 @@ CREATE TRIGGER customer_statuses_sync_current
     FOR EACH ROW EXECUTE FUNCTION sync_customer_current_status();
 
 -- =============================================================
--- 33. Reuse-chain guard (root-only content)
+-- 32. Reuse-chain guard (root-only content)
 -- =============================================================
 CREATE OR REPLACE FUNCTION forbid_content_on_leaf_ad()
 RETURNS TRIGGER AS $$
@@ -936,7 +918,7 @@ CREATE TRIGGER ad_reopen_prompts_root_only
     FOR EACH ROW EXECUTE FUNCTION forbid_content_on_leaf_ad();
 
 -- =============================================================
--- 34. effective_ad_id() - Takes TEXT slug, returns UUID root
+-- 33. effective_ad_id() - Takes TEXT slug, returns UUID root
 -- =============================================================
 CREATE OR REPLACE FUNCTION effective_ad_id(p_source_ad_id TEXT)
 RETURNS UUID
@@ -956,7 +938,7 @@ AS $$
 $$;
 
 -- =============================================================
--- 35. Active views
+-- 34. Active views
 -- =============================================================
 CREATE VIEW active_languages AS
 SELECT * FROM languages
@@ -976,10 +958,6 @@ WHERE start_date <= CURRENT_DATE AND CURRENT_DATE <= end_date;
 
 CREATE VIEW active_messages AS
 SELECT * FROM messages
-WHERE start_date <= CURRENT_DATE AND CURRENT_DATE <= end_date;
-
-CREATE VIEW active_settings AS
-SELECT * FROM settings
 WHERE start_date <= CURRENT_DATE AND CURRENT_DATE <= end_date;
 
 CREATE VIEW active_pricing_tiers AS
@@ -1065,29 +1043,15 @@ SELECT
     COALESCE(a.email_to, c.email_to) AS email_to,
     COALESCE(a.email_cc, c.email_cc) AS email_cc,
     COALESCE(a.email_bcc, c.email_bcc) AS email_bcc,
+    c.sms_numbers || a.sms_numbers AS sms_numbers, -- MERGED JSONB
     a.start_date,
     a.end_date
 FROM active_ads a
 JOIN active_clients c ON c.client_id = a.client_id;
 
 -- =============================================================
--- 36. Live Chat by Question View
+-- 35. Live Chat by Question View
 -- =============================================================
--- Per-question abandonment for the Live Chat qualification flow.
--- Answers "at which question do customers drop off?".
---
--- For each (client, ad, question_order):
---   attempts    = answered + abandoned
---   completions = customers who answered (i.e., passed) this question
---   abandons    = customers whose conversation is in state='abandoned'
---                 with current_order pointing at this question
---   abandon_pct = abandons / attempts
---
--- A high abandon_pct means that question is a cliff.
---
--- Note on the schema: conversations has customer_id, not ad_id.
--- The ad is reached via customers.ad_id. Both CTEs below handle
--- that join; without it, the view references a non-existent column.
 CREATE VIEW v_live_chat_by_question AS
 WITH
 answered AS (

@@ -1,25 +1,6 @@
 """
 entities/website.py
 Registry of entity types the loader knows how to write (website DB).
-
-Each EntitySpec describes:
-  - name:         JSON key the entity lives under
-  - table:        Postgres table to write
-  - pk_col:       primary key column, or - for tables whose real PK is
-                  an IDENTITY the loader never sees - the UNIQUE column
-                  used as the row identity across runs
-  - pk_kind:      string tag passed to uuid_gen.derive()
-  - natural_key:  tuple of PG column names that identify the logical
-                  entity (NOT the version PK). For unversioned tables
-                  this is the PK. For versioned tables this is the
-                  logical key that stays constant across versions.
-  - versioned:    True if the table has multiple rows per logical key
-  - version_key:  for versioned tables, extra fields that distinguish
-                  one version from another (usually "start_date")
-  - columns:      JSON field name -> Postgres column name mapping for
-                  the mutable payload
-  - parent_refs:  JSON field -> (kind, natural_key_field). Resolved at
-                  plan time.
 """
 
 from loader.entities import EntitySpec
@@ -40,6 +21,7 @@ CLIENTS = EntitySpec(
         "email_to": "email_to",
         "email_cc": "email_cc",
         "email_bcc": "email_bcc",
+        "sms_numbers": "sms_numbers", # ADDED
         "country_code": "country_id",
         "segment_code": "segment_id",
         "currency_code": "currency_id",
@@ -87,6 +69,7 @@ ADS = EntitySpec(
         "email_to": "email_to",
         "email_cc": "email_cc",
         "email_bcc": "email_bcc",
+        "sms_numbers": "sms_numbers", # ADDED
         "reopen_policy": "reopen_policy",
         "language_code": "language_id",
         "start_date": "start_date",

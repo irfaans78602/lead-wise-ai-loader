@@ -119,11 +119,8 @@ CREATE TRIGGER subscriptions_changed_at
     FOR EACH ROW EXECUTE FUNCTION set_changed_at();
 
 -- -------------------------------------------------------------
--- 7. Flattened view (Now includes Tier limits)
+-- 7. Flattened view
 -- -------------------------------------------------------------
--- Keyed by instance_id: one row per (client, instance_type).
--- Use this when you need per-instance data (which Ask AI instance,
--- which db_connect_string override, which gemini_api_key override).
 CREATE VIEW v_tenant_config AS
 SELECT
     i.instance_id,
@@ -135,8 +132,6 @@ SELECT
     COALESCE(i.brand_color, c.brand_color)             AS brand_color,
     c.allowed_origins,
     c.status,
-    
-    -- ADDED: Tier constraints for automatic validation
     s.tier_id,
     t.display_name                                     AS tier_name,
     t.max_embeddings,
@@ -151,23 +146,6 @@ WHERE c.status IN ('active', 'trial')
 -- -------------------------------------------------------------
 -- 7b. Active clients (client-level)
 -- -------------------------------------------------------------
--- Companion to v_tenant_config. Where v_tenant_config is keyed by
--- instance_id (one row per instance per client), active_clients is
--- keyed by client_id (one row per client).
---
--- Use this when you need "which clients are live right now" without
--- caring which instances they have. The test harness at /test_chats
--- uses this view to populate its client dropdown.
---
--- LEFT JOINs on client_subscriptions and tiers so a client with no
--- subscription (e.g. a pilot client mid-onboarding, or the platform
--- owner) still appears, with NULL tier info. Change to INNER JOINs
--- if you want to hide those.
---
--- This view is NOT the same as the tenant-side `active_clients`
--- view (which lives in the tenant DB and has different columns:
--- allowed_origins, email_to, country_id, segment_id, etc.).
--- Same name, different DB, different purpose. Do not merge them.
 CREATE VIEW active_clients AS
 SELECT
     c.client_id,
@@ -197,9 +175,8 @@ WHERE c.status IN ('active', 'trial')
 -- -------------------------------------------------------------
 -- 8. Settings
 -- -------------------------------------------------------------
--- CHANGED: setting_value is TEXT instead of NUMERIC(10,4) so it
--- can store both numbers and string secrets (like the test harness
--- key). setting_type now includes 'string' for validation.
+-- Consolidated settings table (contains both platform routing 
+-- and operational rate limits).
 CREATE TABLE settings (
     setting_id     BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     setting_key    TEXT NOT NULL UNIQUE,
@@ -213,6 +190,11 @@ CREATE TABLE settings (
     CHECK (start_date <= end_date)
 );
 CREATE INDEX settings_active_idx ON settings (start_date, end_date);
+
+-- Optimized index for global app settings lookups
+CREATE UNIQUE INDEX settings_key_active_idx 
+    ON settings (setting_key) 
+    WHERE end_date = '9999-12-31';
 
 CREATE VIEW active_settings AS
 SELECT * FROM settings

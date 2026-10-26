@@ -121,6 +121,9 @@ CREATE TRIGGER subscriptions_changed_at
 -- -------------------------------------------------------------
 -- 7. Flattened view (Now includes Tier limits)
 -- -------------------------------------------------------------
+-- Keyed by instance_id: one row per (client, instance_type).
+-- Use this when you need per-instance data (which Ask AI instance,
+-- which db_connect_string override, which gemini_api_key override).
 CREATE VIEW v_tenant_config AS
 SELECT
     i.instance_id,
@@ -140,6 +143,52 @@ SELECT
     s.current_embeddings
 FROM instances i
 JOIN clients c ON c.client_id = i.client_id
+LEFT JOIN client_subscriptions s ON s.client_id = c.client_id
+LEFT JOIN tiers t ON t.tier_id = s.tier_id
+WHERE c.status IN ('active', 'trial')
+  AND CURRENT_DATE BETWEEN c.start_date AND c.end_date;
+
+-- -------------------------------------------------------------
+-- 7b. Active clients (client-level)
+-- -------------------------------------------------------------
+-- Companion to v_tenant_config. Where v_tenant_config is keyed by
+-- instance_id (one row per instance per client), active_clients is
+-- keyed by client_id (one row per client).
+--
+-- Use this when you need "which clients are live right now" without
+-- caring which instances they have. The test harness at /test_chats
+-- uses this view to populate its client dropdown.
+--
+-- LEFT JOINs on client_subscriptions and tiers so a client with no
+-- subscription (e.g. a pilot client mid-onboarding, or the platform
+-- owner) still appears, with NULL tier info. Change to INNER JOINs
+-- if you want to hide those.
+--
+-- This view is NOT the same as the tenant-side `active_clients`
+-- view (which lives in the tenant DB and has different columns:
+-- allowed_origins, email_to, country_id, segment_id, etc.).
+-- Same name, different DB, different purpose. Do not merge them.
+CREATE VIEW active_clients AS
+SELECT
+    c.client_id,
+    c.client_name,
+    c.admin_email,
+    c.db_connect_string,
+    c.gemini_api_key,
+    c.allowed_origins,
+    c.brand_color,
+    c.status,
+    c.start_date,
+    c.end_date,
+    c.created_at,
+    c.changed_at,
+    s.tier_id,
+    t.display_name       AS tier_name,
+    t.max_embeddings,
+    t.max_storage_mb,
+    s.current_embeddings,
+    s.subscription_status
+FROM clients c
 LEFT JOIN client_subscriptions s ON s.client_id = c.client_id
 LEFT JOIN tiers t ON t.tier_id = s.tier_id
 WHERE c.status IN ('active', 'trial')

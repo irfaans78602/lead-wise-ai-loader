@@ -33,17 +33,22 @@ def read_state(conn, plan: Plan) -> dict:
 def _row_identity(op: PlanOp, row: dict):
     """
     A stable string key per row for cross-snapshot matching.
-
-    Most tables: the PK.
-    pricing_discounts: all identifying columns (see write.py).
     """
     spec = op.spec
+
     if spec.pk_col == "pricing_discount_id":
         p = row
         return (f"{p.get('client_id')}:{p.get('country_id')}:"
                 f"{p.get('segment_id')}:{p.get('field_name')}:"
                 f"{p['discount_type']}:{p['leads_min']}:{p['leads_max']}:"
                 f"{p['start_date']}")
+
+    if spec.pk_col == "client_text_key":
+        p = row
+        return (f"{p.get('client_id')}:{p.get('channel')}:"
+                f"{p.get('locale')}:{p.get('text_key')}:"
+                f"{p.get('start_date')}")
+
     return str(row[spec.pk_col])
 
 
@@ -67,6 +72,22 @@ def _fetch_one(conn, op: PlanOp):
                  p.get("segment_id"), p.get("field_name"),
                  p["discount_type"], p["leads_min"], p["leads_max"],
                  p["start_date"]),
+            )
+            return cur.fetchone()
+
+    if spec.pk_col == "client_text_key":
+        p = op.payload
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT * FROM client_texts
+                   WHERE client_id = %s
+                     AND channel   = %s
+                     AND locale    = %s
+                     AND text_key  = %s
+                     AND start_date = %s""",
+                (p.get("client_id"), p.get("channel"),
+                 p.get("locale"), p.get("text_key"),
+                 p.get("start_date")),
             )
             return cur.fetchone()
 

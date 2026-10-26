@@ -282,8 +282,6 @@ CREATE TABLE clients (
                          CHECK (closed_behavior IN ('reply','silent')),
     reopen_policy        TEXT NOT NULL DEFAULT 'reopen'
                          CHECK (reopen_policy IN ('reopen','prompt','forward')),
-    -- Comma-delimited CORS allowlist for the live chatbot, no spaces, e.g.
-    -- 'https://example.com,https://www.example.com'. Lowercase, no trailing slash.
     allowed_origins      TEXT NOT NULL DEFAULT ''
                          CHECK (allowed_origins = ''
                                 OR allowed_origins ~ '^https?://[a-z0-9.-]+(:[0-9]{1,5})?(,https?://[a-z0-9.-]+(:[0-9]{1,5})?)*$'),
@@ -378,8 +376,6 @@ CREATE UNIQUE INDEX pricing_discounts_volume_unique
     ON pricing_discounts (discount_type, leads_min, leads_max, start_date)
     WHERE client_id IS NULL AND country_id IS NULL AND segment_id IS NULL;
 
--- Volume tiers linked to a client (client_id set). The platform-wide
--- index above only covers client_id IS NULL.
 CREATE UNIQUE INDEX pricing_discounts_client_volume_unique
     ON pricing_discounts (client_id, discount_type, leads_min, leads_max, start_date)
     WHERE client_id IS NOT NULL AND discount_type = 'volume';
@@ -393,7 +389,7 @@ CREATE UNIQUE INDEX pricing_discounts_client_field_unique
     WHERE client_id IS NOT NULL AND field_name IS NOT NULL AND end_date = '9999-12-31';
 
 -- =============================================================
--- 15. Client Messages â€” VERSIONED
+-- 15. Client Messages - VERSIONED
 -- =============================================================
 CREATE TABLE client_messages (
     client_message_id   UUID PRIMARY KEY,
@@ -416,7 +412,7 @@ CREATE UNIQUE INDEX client_messages_current_unique
     WHERE end_date = '9999-12-31';
 
 -- =============================================================
--- 16. Ads â€” STABLE IDENTITY + CONFIG, NOT VERSIONED
+-- 16. Ads - STABLE IDENTITY + CONFIG, NOT VERSIONED
 -- =============================================================
 CREATE TABLE ads (
     ad_id               UUID PRIMARY KEY,
@@ -447,7 +443,7 @@ CREATE INDEX ads_language_idx    ON ads (language_id);
 CREATE INDEX ads_placeholder_idx ON ads (client_id, is_placeholder) WHERE is_placeholder = TRUE;
 
 -- =============================================================
--- 17. Ad Confirmations â€” VERSIONED
+-- 17. Ad Confirmations - VERSIONED
 -- =============================================================
 CREATE TABLE ad_confirmations (
     ad_confirmation_id  UUID PRIMARY KEY,
@@ -470,7 +466,7 @@ CREATE UNIQUE INDEX ad_confirmations_current_unique
     WHERE end_date = '9999-12-31';
 
 -- =============================================================
--- 18. Ad Reopen Prompts â€” VERSIONED
+-- 18. Ad Reopen Prompts - VERSIONED
 -- =============================================================
 CREATE TABLE ad_reopen_prompts (
     ad_reopen_prompt_id   UUID PRIMARY KEY,
@@ -497,7 +493,7 @@ CREATE UNIQUE INDEX ad_reopen_prompts_current_unique
     WHERE end_date = '9999-12-31';
 
 -- =============================================================
--- 19. FAQs â€” VERSIONED
+-- 19. FAQs - VERSIONED
 -- =============================================================
 CREATE TABLE faqs (
     faq_id           UUID PRIMARY KEY,
@@ -548,7 +544,7 @@ CREATE UNIQUE INDEX faqs_current_order_unique
     WHERE end_date = '9999-12-31';
 
 -- =============================================================
--- 20. Customers â€” RUNTIME
+-- 20. Customers - RUNTIME
 -- =============================================================
 CREATE TABLE customers (
     customer_id          BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -575,7 +571,7 @@ CREATE INDEX customers_qualification_idx ON customers (qualification_id);
 CREATE INDEX idx_customers_ip_hash       ON customers (ip_hash);
 
 -- =============================================================
--- 21. Conversations â€” RUNTIME
+-- 21. Conversations - RUNTIME
 -- =============================================================
 CREATE TABLE conversations (
     conversation_id                 BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -597,7 +593,7 @@ CREATE INDEX conversations_state_idx    ON conversations (state);
 CREATE INDEX conversations_language_idx ON conversations (language_id);
 
 -- =============================================================
--- 22. Answers â€” RUNTIME
+-- 22. Answers - RUNTIME
 -- =============================================================
 CREATE TABLE answers (
     answer_id        BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -634,7 +630,7 @@ CREATE INDEX qualification_levels_language_idx ON qualification_levels (language
 CREATE INDEX qualification_levels_active_idx   ON qualification_levels (start_date, end_date);
 
 -- =============================================================
--- 24. Qualification Score â€” VERSIONED
+-- 24. Qualification Score - VERSIONED
 -- =============================================================
 CREATE TABLE qualification_score (
     qualification_score_id  UUID PRIMARY KEY,
@@ -657,13 +653,11 @@ CREATE UNIQUE INDEX qualification_score_current_unique
     ON qualification_score (ad_id, level_code)
     WHERE end_date = '9999-12-31';
 
--- Overlap guard
 ALTER TABLE qualification_score
     ADD CONSTRAINT qualification_score_no_overlap
     EXCLUDE USING gist (ad_id WITH =, score WITH &&)
     WHERE (end_date = '9999-12-31');
 
--- Customers FK to a specific score version
 ALTER TABLE customers
     ADD CONSTRAINT customers_qualification_fk
     FOREIGN KEY (qualification_id)
@@ -671,7 +665,7 @@ ALTER TABLE customers
     ON DELETE SET NULL;
 
 -- =============================================================
--- 25. Qualifications â€” RUNTIME
+-- 25. Qualifications - RUNTIME
 -- =============================================================
 CREATE TABLE qualifications (
     qualification_event_id  BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -740,7 +734,7 @@ CREATE INDEX agency_users_email_idx  ON agency_users (lower(email));
 CREATE INDEX agency_users_active_idx ON agency_users (agency_id, start_date, end_date);
 
 -- =============================================================
--- 28. Customer Statuses â€” RUNTIME
+-- 28. Customer Statuses - RUNTIME
 -- =============================================================
 CREATE TABLE customer_statuses (
     customer_status_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -826,7 +820,7 @@ CREATE UNIQUE INDEX invoice_payments_one_per_period
     ON invoice_payments (client_id, billing_period_start, billing_period_end);
 
 -- =============================================================
--- 31. Contacts â€” RUNTIME, APPEND-ONLY
+-- 31. Contacts - RUNTIME, APPEND-ONLY
 -- =============================================================
 CREATE TABLE contacts (
     contact_id      BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -942,7 +936,7 @@ CREATE TRIGGER ad_reopen_prompts_root_only
     FOR EACH ROW EXECUTE FUNCTION forbid_content_on_leaf_ad();
 
 -- =============================================================
--- 34. effective_ad_id() â€” Takes TEXT slug, returns UUID root
+-- 34. effective_ad_id() - Takes TEXT slug, returns UUID root
 -- =============================================================
 CREATE OR REPLACE FUNCTION effective_ad_id(p_source_ad_id TEXT)
 RETURNS UUID
@@ -1061,9 +1055,8 @@ SELECT a.*
 FROM active_ads a
 JOIN active_clients c ON c.client_id = a.client_id;
 
--- New view for email routing logic (Ad-level overrides Client-level)
 CREATE VIEW active_ads_with_merged_emails AS
-SELECT 
+SELECT
     a.ad_id,
     a.client_id,
     a.ad_name,
@@ -1076,5 +1069,72 @@ SELECT
     a.end_date
 FROM active_ads a
 JOIN active_clients c ON c.client_id = a.client_id;
+
+-- =============================================================
+-- 36. Live Chat by Question View
+-- =============================================================
+-- Per-question abandonment for the Live Chat qualification flow.
+-- Answers "at which question do customers drop off?".
+--
+-- For each (client, ad, question_order):
+--   attempts    = answered + abandoned
+--   completions = customers who answered (i.e., passed) this question
+--   abandons    = customers whose conversation is in state='abandoned'
+--                 with current_order pointing at this question
+--   abandon_pct = abandons / attempts
+--
+-- A high abandon_pct means that question is a cliff.
+--
+-- Note on the schema: conversations has customer_id, not ad_id.
+-- The ad is reached via customers.ad_id. Both CTEs below handle
+-- that join; without it, the view references a non-existent column.
+CREATE VIEW v_live_chat_by_question AS
+WITH
+answered AS (
+    SELECT
+        f.ad_id,
+        f.question_order,
+        count(DISTINCT ans.conversation_id) AS answered
+    FROM answers ans
+    JOIN active_faqs f ON f.faq_id = ans.faq_id
+    JOIN conversations c ON c.conversation_id = ans.conversation_id
+    WHERE c.state IN ('completed', 'abandoned', 'rate_limited')
+    GROUP BY f.ad_id, f.question_order
+),
+abandoned AS (
+    SELECT
+        cu.ad_id,
+        c.current_order AS question_order,
+        count(DISTINCT c.conversation_id) AS abandoned
+    FROM conversations c
+    JOIN customers cu ON cu.customer_id = c.customer_id
+    WHERE c.state = 'abandoned'
+      AND c.current_order IS NOT NULL
+    GROUP BY cu.ad_id, c.current_order
+)
+SELECT
+    a.client_id,
+    f.ad_id,
+    f.question_order,
+    f.question_text->>'en' AS question_en,
+    f.question_type,
+    COALESCE(ans.answered, 0)              AS completions,
+    COALESCE(abn.abandoned, 0)             AS abandons,
+    COALESCE(ans.answered, 0)
+      + COALESCE(abn.abandoned, 0)         AS attempts,
+    round(
+        100.0 * COALESCE(abn.abandoned, 0)
+        / nullif(COALESCE(ans.answered, 0)
+               + COALESCE(abn.abandoned, 0), 0),
+        1
+    ) AS abandon_pct
+FROM active_ads a
+JOIN active_faqs f ON f.ad_id = a.ad_id
+LEFT JOIN answered  ans ON ans.ad_id = f.ad_id
+                        AND ans.question_order = f.question_order
+LEFT JOIN abandoned abn ON abn.ad_id = f.ad_id
+                        AND abn.question_order = f.question_order
+WHERE COALESCE(ans.answered, 0) + COALESCE(abn.abandoned, 0) > 0
+ORDER BY a.client_id, f.ad_id, f.question_order;
 
 COMMIT;

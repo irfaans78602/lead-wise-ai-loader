@@ -63,6 +63,12 @@ def _hint(op: PlanOp) -> str:
         pct = p.get("discount_pct", "")
         label = p.get("label", "")
         return f"pct={pct} label={label}"
+    if table == "client_texts":
+        key = p.get("text_key", "")
+        val = p.get("text_value", "")
+        if isinstance(val, str) and len(val) > 40:
+            val = val[:37] + "..."
+        return f"{key}: {val}"
     if table == "client_messages":
         return "message_text"
     if table == "ad_confirmations":
@@ -94,6 +100,8 @@ def _write_one(conn, op: PlanOp) -> str:
     spec = op.spec
     if spec.pk_col == "pricing_discount_id":
         return _upsert_pricing_discount(conn, op)
+    if spec.pk_col == "client_text_key":
+        return _upsert_client_text(conn, op)
     if spec.versioned:
         return _write_versioned(conn, op)
     return _upsert_by_pk(conn, op)
@@ -117,6 +125,33 @@ def _upsert_by_pk(conn, op: PlanOp) -> str:
         f"INSERT INTO {spec.table} ({', '.join(cols)}) "
         f"VALUES ({', '.join(['%s'] * len(cols))}) "
         f"ON CONFLICT ({spec.pk_col}) DO UPDATE SET {update_clause} "
+        f"RETURNING (xmax = 0) AS inserted"
+    )
+    with conn.cursor() as cur:
+        cur.execute(sql, values)
+        return "insert" if cur.fetchone()["inserted"] else "update"
+
+
+def _upsert_client_text(conn, op: PlanOp) -> str:
+    """
+    client_texts has a composite PK:
+        (client_id, channel, locale, text_key, start_date)
+
+    Insert or update on that exact key. All five key columns are the
+    identity; text_value and end_date are the mutable payload.
+    """
+    p = op.payload
+    update_cols = ["text_value", "end_date"]
+    update_clause = ", ".join(f"{c} = EXCLUDED.{c}" for c in update_cols)
+
+    cols = list(p.keys())
+    values = [_serialize(p[c]) for c in cols]
+
+    sql = (
+        f"INSERT INTO client_texts ({', '.join(cols)}) "
+        f"VALUES ({', '.join(['%s'] * len(cols))}) "
+        f"ON CONFLICT (client_id, channel, locale, text_key, start_date) "
+        f"DO UPDATE SET {update_clause} "
         f"RETURNING (xmax = 0) AS inserted"
     )
     with conn.cursor() as cur:

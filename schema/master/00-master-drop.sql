@@ -12,6 +12,7 @@ DROP VIEW IF EXISTS v_tenant_config     CASCADE;
 DROP TRIGGER IF EXISTS clients_changed_at             ON clients              CASCADE;
 DROP TRIGGER IF EXISTS instances_changed_at           ON instances            CASCADE;
 DROP TRIGGER IF EXISTS subscriptions_changed_at       ON client_subscriptions CASCADE;
+DROP TRIGGER IF EXISTS settings_changed_at            ON settings             CASCADE;
 
 DROP FUNCTION IF EXISTS set_changed_at() CASCADE;
 

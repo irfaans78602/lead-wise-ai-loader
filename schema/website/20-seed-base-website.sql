@@ -261,30 +261,7 @@ INSERT INTO messages (message_code, message_text, description) VALUES
 ON CONFLICT (message_code) DO NOTHING;
 
 -- =============================================================
--- 8. Settings
--- =============================================================
-INSERT INTO settings (setting_key, setting_value, setting_type, description) VALUES
-    ('agency_discount_pct',       20.0000,  'number',  'Wholesale discount for agencies'),
-    ('bundle_bots_seo_pct',       10.0000,  'number',  'Bundle discount: Bots + SEO'),
-    ('bundle_bots_seo_ads_pct',   15.0000,  'number',  'Bundle discount: Bots + SEO + Ads'),
-    ('bundle_bots_seo_wp_pct',    15.0000,  'number',  'Bundle discount: Bots + SEO + WordPress'),
-    ('bundle_full_stack_pct',     20.0000,  'number',  'Bundle discount: all four services'),
-    ('pilot_setup_discount_pct', 100.0000,  'number',  'Pilot: setup fee waived'),
-    ('pilot_base_discount_pct',   50.0000,  'number',  'Pilot: base fee halved'),
-    ('pilot_duration_months',      6.0000,  'number',  'Pilot pricing duration in months'),
-    ('max_invalid_answers',        5.0000,  'integer', 'Consecutive invalid answers before rate-limiting'),
-    ('rate_limit_cooldown_hours', 24.0000,  'number',  'Cool-down duration after rate limiting'),
-    ('rate_limit_window_seconds_1', 60.0000,   'number', 'First rate-limit window (seconds)'),
-    ('rate_limit_max_1',             10.0000,  'number', 'Max messages in window 1'),
-    ('rate_limit_window_seconds_2', 3600.0000, 'number', 'Second rate-limit window (seconds)'),
-    ('rate_limit_max_2',             60.0000,  'number', 'Max messages in window 2'),
-    ('rate_limit_window_seconds_3', 86400.0000,'number', 'Third rate-limit window (seconds)'),
-    ('rate_limit_max_3',            200.0000,  'number', 'Max messages in window 3'),
-    ('rate_limit_cleanup_hours',     48.0000,  'number', 'Prune rate-limit rows older than this')
-ON CONFLICT (setting_key) DO NOTHING;
-
--- =============================================================
--- 9. Pricing Tiers
+-- 8. Pricing Tiers
 -- =============================================================
 INSERT INTO pricing_tiers (tier_code, tier_name, tier_order, description) VALUES
     ('standard',     'Standard',     1, 'Trades, beauty, pet, non-profit, hospitality, fitness'),
@@ -294,7 +271,7 @@ INSERT INTO pricing_tiers (tier_code, tier_name, tier_order, description) VALUES
 ON CONFLICT (tier_code) DO NOTHING;
 
 -- =============================================================
--- 10. Pricing Segment Tiers
+-- 9. Pricing Segment Tiers
 -- =============================================================
 INSERT INTO pricing_segment_tiers (segment_id, tier_id)
 SELECT s.segment_id, t.tier_id
@@ -328,40 +305,23 @@ JOIN pricing_tiers t ON t.tier_code = v.tier_code
 ON CONFLICT (segment_id, start_date) DO NOTHING;
 
 -- =============================================================
--- 11. Schema Version
+-- 10. Settings (Live Chat & Operational)
 -- =============================================================
-INSERT INTO settings (setting_key, setting_value, setting_type, description)
-VALUES ('schema_version', 1, 'integer',
-        'Loader-expected schema version; compare against EXPECTED_SCHEMA_VERSION')
-ON CONFLICT (setting_key) DO UPDATE
-SET setting_value = EXCLUDED.setting_value,
-    description   = EXCLUDED.description;
-
--- =============================================================
--- 12. Ask AI Limits
--- =============================================================
-INSERT INTO settings (setting_key, setting_value, setting_type, description)
-VALUES ('ask_ai_rate_limit_max', 25, 'integer', 'Max questions per IP for Ask AI')
-ON CONFLICT (setting_key) DO UPDATE SET setting_value = 25;
-
-INSERT INTO settings (setting_key, setting_value, setting_type, description)
-VALUES ('ask_ai_rate_limit_window_minutes', 60, 'integer', 'Time window in minutes for Ask AI rate limit')
-ON CONFLICT (setting_key) DO UPDATE SET setting_value = 60;
-
-INSERT INTO settings (setting_key, setting_value, setting_type, description)
-VALUES ('ask_ai_chunk_limit', 10, 'integer', 'Number of RAG chunks to retrieve from vector search')
-ON CONFLICT (setting_key) DO UPDATE SET setting_value = 10;
-
--- =============================================================
--- 13. Website Chat Limits
--- =============================================================
-INSERT INTO settings (setting_key, setting_value, setting_type, description)
-VALUES 
-  ('chat_rate_limit_max', 25, 'integer', 'Max messages per IP for Website Chat'),
-  ('chat_rate_limit_window_minutes', 60, 'integer', 'Time window in minutes for Website Chat rate limit')
+INSERT INTO settings (setting_key, setting_value, setting_type, description) VALUES
+    ('schema_version', 1, 'integer', 'Loader-expected schema version'),
+    ('max_invalid_answers',        5.0000,  'integer', 'Consecutive invalid answers before rate-limiting'),
+    ('rate_limit_cooldown_hours', 24.0000,  'number',  'Cool-down duration after rate limiting'),
+    ('rate_limit_window_seconds_1', 60.0000,   'number', 'First rate-limit window (seconds)'),
+    ('rate_limit_max_1',             10.0000,  'number', 'Max messages in window 1'),
+    ('rate_limit_window_seconds_2', 3600.0000, 'number', 'Second rate-limit window (seconds)'),
+    ('rate_limit_max_2',             60.0000,  'number', 'Max messages in window 2'),
+    ('rate_limit_window_seconds_3', 86400.0000,'number', 'Third rate-limit window (seconds)'),
+    ('rate_limit_max_3',            200.0000,  'number', 'Max messages in window 3'),
+    ('rate_limit_cleanup_hours',     48.0000,  'number', 'Prune rate-limit rows older than this'),
+    ('chat_rate_limit_max',          25.0000,  'integer','Max messages per IP for Website Chat'),
+    ('chat_rate_limit_window_minutes', 60.0000,'integer','Time window in minutes for Website Chat rate limit')
 ON CONFLICT (setting_key) DO UPDATE 
-SET 
-  setting_value = EXCLUDED.setting_value,
-  setting_type = EXCLUDED.setting_type;
+SET setting_value = EXCLUDED.setting_value,
+    setting_type = EXCLUDED.setting_type;
 
 COMMIT;

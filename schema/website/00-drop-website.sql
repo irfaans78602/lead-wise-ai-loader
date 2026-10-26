@@ -1,12 +1,12 @@
 -- =============================================================
--- 00-lead-wise-ai-drop.sql
--- Drops everything created by 10-lead-wise-ai-schema.sql.
+-- 00-drop-website.sql
+-- Drops everything created by 10-schema-website.sql.
 -- =============================================================
 
 BEGIN;
 
 -- -------------------------------------------------------------
--- Views first (they reference tables, drop before them)
+-- Views first
 -- -------------------------------------------------------------
 DROP VIEW IF EXISTS v_live_chat_dropoff             CASCADE;
 DROP VIEW IF EXISTS v_live_chat_funnel              CASCADE;
@@ -63,7 +63,7 @@ DROP FUNCTION IF EXISTS effective_ad_id(TEXT)              CASCADE;
 DROP FUNCTION IF EXISTS set_updated_at()                   CASCADE;
 
 -- -------------------------------------------------------------
--- Tables in reverse dependency order
+-- Tables
 -- -------------------------------------------------------------
 DROP TABLE IF EXISTS live_chat_logs           CASCADE;
 DROP TABLE IF EXISTS customer_statuses        CASCADE;

@@ -1,6 +1,6 @@
 -- =============================================================
 -- 10-master-schema.sql
--- Master DB schema for multi-tenant routing and tier management.
+-- Master DB schema for multi-tenant routing and AI settings.
 -- =============================================================
 
 BEGIN;
@@ -8,19 +8,18 @@ BEGIN;
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- -------------------------------------------------------------
--- 1. Tiers (Defines your 10 commercial plans)
+-- 1. Tiers
 -- -------------------------------------------------------------
 CREATE TABLE tiers (
     tier_id             TEXT PRIMARY KEY, 
     display_name        TEXT NOT NULL,
     max_embeddings      INTEGER NOT NULL,
     max_storage_mb      INTEGER NOT NULL,
-    neon_compute_size   TEXT NOT NULL,     -- Maps to Neon's CU sizes
+    neon_compute_size   TEXT NOT NULL,
     monthly_base_fee    NUMERIC(10, 2) NOT NULL,
     created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- Seed the 10 tiers you outlined
 INSERT INTO tiers (tier_id, display_name, max_embeddings, max_storage_mb, neon_compute_size, monthly_base_fee) VALUES
 ('nano',            'Nano',            10000,     1024,  'CU_0.25', 0.00),
 ('micro',           'Micro',           25000,     2048,  'CU_0.25', 0.00),
@@ -55,7 +54,7 @@ CREATE TABLE clients (
 );
 
 -- -------------------------------------------------------------
--- 3. Client Subscriptions (Maps clients to tiers & tracks Neon)
+-- 3. Client Subscriptions
 -- -------------------------------------------------------------
 CREATE TABLE client_subscriptions (
     client_id           UUID PRIMARY KEY REFERENCES clients(client_id) ON DELETE CASCADE,
@@ -96,7 +95,29 @@ CREATE TABLE tenant_usage_log (
 CREATE INDEX tenant_usage_date_idx ON tenant_usage_log (created_at DESC);
 
 -- -------------------------------------------------------------
--- 6. Auto-update changed_at
+-- 6. Settings (Ask AI Configuration & Routing)
+-- -------------------------------------------------------------
+CREATE TABLE settings (
+    setting_id     BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    setting_key    TEXT NOT NULL UNIQUE,
+    setting_value  TEXT NOT NULL,
+    setting_type   TEXT NOT NULL DEFAULT 'number'
+                   CHECK (setting_type IN ('number','boolean','integer','string')),
+    description    TEXT,
+    start_date     DATE NOT NULL DEFAULT '1900-01-01',
+    end_date       DATE NOT NULL DEFAULT '9999-12-31',
+    updated_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CHECK (start_date <= end_date)
+);
+CREATE INDEX settings_active_idx ON settings (start_date, end_date);
+CREATE UNIQUE INDEX settings_key_active_idx ON settings (setting_key) WHERE end_date = '9999-12-31';
+
+CREATE VIEW active_settings AS
+SELECT * FROM settings
+WHERE start_date <= CURRENT_DATE AND CURRENT_DATE <= end_date;
+
+-- -------------------------------------------------------------
+-- 7. Auto-update changed_at
 -- -------------------------------------------------------------
 CREATE OR REPLACE FUNCTION set_changed_at()
 RETURNS TRIGGER AS $$
@@ -106,20 +127,13 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER clients_changed_at
-    BEFORE UPDATE ON clients
-    FOR EACH ROW EXECUTE FUNCTION set_changed_at();
-
-CREATE TRIGGER instances_changed_at
-    BEFORE UPDATE ON instances
-    FOR EACH ROW EXECUTE FUNCTION set_changed_at();
-
-CREATE TRIGGER subscriptions_changed_at
-    BEFORE UPDATE ON client_subscriptions
-    FOR EACH ROW EXECUTE FUNCTION set_changed_at();
+CREATE TRIGGER clients_changed_at BEFORE UPDATE ON clients FOR EACH ROW EXECUTE FUNCTION set_changed_at();
+CREATE TRIGGER instances_changed_at BEFORE UPDATE ON instances FOR EACH ROW EXECUTE FUNCTION set_changed_at();
+CREATE TRIGGER subscriptions_changed_at BEFORE UPDATE ON client_subscriptions FOR EACH ROW EXECUTE FUNCTION set_changed_at();
+CREATE TRIGGER settings_changed_at BEFORE UPDATE ON settings FOR EACH ROW EXECUTE FUNCTION set_changed_at();
 
 -- -------------------------------------------------------------
--- 7. Flattened view
+-- 8. Flattened Views
 -- -------------------------------------------------------------
 CREATE VIEW v_tenant_config AS
 SELECT
@@ -143,9 +157,6 @@ LEFT JOIN tiers t ON t.tier_id = s.tier_id
 WHERE c.status IN ('active', 'trial')
   AND CURRENT_DATE BETWEEN c.start_date AND c.end_date;
 
--- -------------------------------------------------------------
--- 7b. Active clients (client-level)
--- -------------------------------------------------------------
 CREATE VIEW active_clients AS
 SELECT
     c.client_id,
@@ -171,33 +182,5 @@ LEFT JOIN client_subscriptions s ON s.client_id = c.client_id
 LEFT JOIN tiers t ON t.tier_id = s.tier_id
 WHERE c.status IN ('active', 'trial')
   AND CURRENT_DATE BETWEEN c.start_date AND c.end_date;
-
--- -------------------------------------------------------------
--- 8. Settings
--- -------------------------------------------------------------
--- Consolidated settings table (contains both platform routing 
--- and operational rate limits).
-CREATE TABLE settings (
-    setting_id     BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    setting_key    TEXT NOT NULL UNIQUE,
-    setting_value  TEXT NOT NULL,
-    setting_type   TEXT NOT NULL DEFAULT 'number'
-                   CHECK (setting_type IN ('number','boolean','integer','string')),
-    description    TEXT,
-    start_date     DATE NOT NULL DEFAULT '1900-01-01',
-    end_date       DATE NOT NULL DEFAULT '9999-12-31',
-    updated_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
-    CHECK (start_date <= end_date)
-);
-CREATE INDEX settings_active_idx ON settings (start_date, end_date);
-
--- Optimized index for global app settings lookups
-CREATE UNIQUE INDEX settings_key_active_idx 
-    ON settings (setting_key) 
-    WHERE end_date = '9999-12-31';
-
-CREATE VIEW active_settings AS
-SELECT * FROM settings
-WHERE start_date <= CURRENT_DATE AND CURRENT_DATE <= end_date;
 
 COMMIT;

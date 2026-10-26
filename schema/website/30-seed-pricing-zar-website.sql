@@ -1,14 +1,14 @@
 -- =============================================================
--- 30-lead-wise-ai-seed-pricing-zar.sql
+-- 30-seed-pricing-zar-website.sql
 -- Pricing bootstrap (ZAR, South Africa) for LeadWise AI.
--- Run after 20-lead-wise-ai-seed-base.sql.
+-- Run after 20-seed-base-website.sql.
 -- Independent of the other two pricing seeds.
 -- Safe to re-run: all inserts are idempotent.
 --
 -- Source: https://lead-wise-ai.com/pricing (ZAR tab).
 --
 -- Contents:
---   1. pricing_rates    (4 tiers Ã— ZA, ZAR via country default)
+--   1. pricing_rates    (4 tiers — ZA, ZAR via country default)
 --   2. pricing_website  (one-time setup fee, ZA)
 --   3. pricing_addons   (SEO + Ads Management, ZA)
 -- =============================================================
@@ -16,7 +16,7 @@
 BEGIN;
 
 -- =============================================================
--- 1. Pricing Rates â€” 4 tiers Ã— ZA.
+-- 1. Pricing Rates — 4 tiers — ZA.
 -- =============================================================
 INSERT INTO pricing_rates
     (tier_id, country_id,
@@ -37,7 +37,7 @@ WHERE co.code = 'ZA'
 ON CONFLICT (tier_id, country_id, start_date) DO NOTHING;
 
 -- =============================================================
--- 2. Pricing Website â€” ZA.
+-- 2. Pricing Website — ZA.
 --    Pilot: 50% off (R2,475 setup, R475 per extra page).
 -- =============================================================
 INSERT INTO pricing_website (country_id, setup_fee, extra_page_fee)
@@ -47,9 +47,9 @@ WHERE co.code = 'ZA'
 ON CONFLICT (country_id, start_date) DO NOTHING;
 
 -- =============================================================
--- 3. Pricing Addons â€” SEO and Ads Management, ZA.
+-- 3. Pricing Addons — SEO and Ads Management, ZA.
 --    SEO:       setup fee + monthly fee (from R500/month).
---    Ads mgmt:  setup fee + 6â€“15% of ad spend, or the minimum
+--    Ads mgmt:  setup fee + 6–15% of ad spend, or the minimum
 --               monthly fee, whichever is higher.
 -- =============================================================
 INSERT INTO pricing_addons

@@ -5,9 +5,6 @@
 
 BEGIN;
 
--- =============================================================
--- 0. Extensions
--- =============================================================
 CREATE EXTENSION IF NOT EXISTS btree_gist;
 
 -- =============================================================
@@ -837,7 +834,31 @@ CREATE INDEX contacts_ip_hash_idx    ON contacts (ip_hash) WHERE ip_hash IS NOT 
 CREATE INDEX contacts_enquiry_idx    ON contacts (enquiry) WHERE enquiry IS NOT NULL;
 
 -- =============================================================
--- 31. Triggers
+-- 31. Live Chat Logs - RUNTIME
+-- =============================================================
+CREATE TABLE live_chat_logs (
+    log_id          BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    client_id       UUID NOT NULL,
+    ad_id           UUID NOT NULL,
+    session_id      TEXT NOT NULL,
+    question        TEXT NOT NULL,
+    answer          TEXT,
+    locale          VARCHAR(5) NOT NULL DEFAULT 'en',
+    ip_hash         VARCHAR(64),
+    utm_source      VARCHAR(100),
+    utm_medium      VARCHAR(100),
+    utm_campaign    VARCHAR(100),
+    section_path    TEXT,
+    status          TEXT NOT NULL DEFAULT 'success',
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX live_chat_logs_client_idx ON live_chat_logs (client_id, created_at DESC);
+CREATE INDEX live_chat_logs_ad_idx ON live_chat_logs (ad_id, created_at DESC);
+CREATE INDEX live_chat_logs_ip_idx ON live_chat_logs (ip_hash, created_at DESC) WHERE ip_hash IS NOT NULL;
+
+-- =============================================================
+-- 32. Triggers
 -- =============================================================
 CREATE OR REPLACE FUNCTION set_updated_at()
 RETURNS TRIGGER AS $$
@@ -883,7 +904,7 @@ CREATE TRIGGER customer_statuses_sync_current
     FOR EACH ROW EXECUTE FUNCTION sync_customer_current_status();
 
 -- =============================================================
--- 32. Reuse-chain guard (root-only content)
+-- 33. Reuse-chain guard (root-only content)
 -- =============================================================
 CREATE OR REPLACE FUNCTION forbid_content_on_leaf_ad()
 RETURNS TRIGGER AS $$
@@ -918,7 +939,7 @@ CREATE TRIGGER ad_reopen_prompts_root_only
     FOR EACH ROW EXECUTE FUNCTION forbid_content_on_leaf_ad();
 
 -- =============================================================
--- 33. effective_ad_id() - Takes TEXT slug, returns UUID root
+-- 34. effective_ad_id() - Takes TEXT slug, returns UUID root
 -- =============================================================
 CREATE OR REPLACE FUNCTION effective_ad_id(p_source_ad_id TEXT)
 RETURNS UUID
@@ -938,7 +959,7 @@ AS $$
 $$;
 
 -- =============================================================
--- 34. Active views
+-- 35. Active views
 -- =============================================================
 CREATE VIEW active_languages AS
 SELECT * FROM languages
@@ -1050,7 +1071,7 @@ FROM active_ads a
 JOIN active_clients c ON c.client_id = a.client_id;
 
 -- =============================================================
--- 35. Live Chat by Question View
+-- 36. Live Chat by Question View
 -- =============================================================
 CREATE VIEW v_live_chat_by_question AS
 WITH
@@ -1100,5 +1121,44 @@ LEFT JOIN abandoned abn ON abn.ad_id = f.ad_id
                         AND abn.question_order = f.question_order
 WHERE COALESCE(ans.answered, 0) + COALESCE(abn.abandoned, 0) > 0
 ORDER BY a.client_id, f.ad_id, f.question_order;
+
+-- =============================================================
+-- 37. Live Chat Funnel View
+-- =============================================================
+CREATE OR REPLACE VIEW v_live_chat_funnel AS
+SELECT
+    client_id,
+    ad_id,
+    date_trunc('day', created_at)::date AS day,
+    status,
+    count(*) AS messages
+FROM live_chat_logs
+GROUP BY client_id, ad_id, day, status;
+
+-- =============================================================
+-- 38. Live Chat Drop-Off View
+-- =============================================================
+CREATE OR REPLACE VIEW v_live_chat_dropoff AS
+WITH per_ad AS (
+    SELECT
+        client_id,
+        ad_id,
+        status,
+        count(*) AS n
+    FROM live_chat_logs
+    WHERE created_at > now() - interval '30 days'
+    GROUP BY client_id, ad_id, status
+)
+SELECT
+    client_id,
+    ad_id,
+    status,
+    n,
+    round(
+        100.0 * n / nullif(sum(n) OVER (PARTITION BY client_id, ad_id), 0),
+        1
+    ) AS pct
+FROM per_ad
+ORDER BY client_id, ad_id, n DESC;
 
 COMMIT;

@@ -1,8 +1,8 @@
 -- =============================================================
--- 20-lead-wise-ai-seed-base.sql
+-- 20-seed-base-website.sql
 -- Base reference data for the LeadWise AI platform.
--- Run after 10-lead-wise-ai-schema.sql.
--- Run BEFORE 30/40/50 (pricing) and 60-lead-wise-ai-seed.sql.
+-- Run after 10-schema-website.sql.
+-- Run BEFORE 30/40/50 (pricing).
 -- Safe to re-run: all inserts and updates are idempotent.
 -- =============================================================
 
@@ -13,10 +13,10 @@ BEGIN;
 -- =============================================================
 INSERT INTO languages (code, name, native_name) VALUES
     ('en', 'English', 'English'),
-    ('ar', 'Arabic',  'Ø§Ù„Ø¹Ø±Ø¨ÙŠØ©'),
-    ('es', 'Spanish', 'EspaÃ±ol'),
-    ('fr', 'French',  'FranÃ§ais'),
-    ('zh', 'Chinese', 'ä¸­æ–‡')
+    ('ar', 'Arabic',  'العربية'),
+    ('es', 'Spanish', 'Español'),
+    ('fr', 'French',  'Français'),
+    ('zh', 'Chinese', '中文')
 ON CONFLICT (code) DO NOTHING;
 
 -- =============================================================
@@ -25,7 +25,7 @@ ON CONFLICT (code) DO NOTHING;
 INSERT INTO currencies (code, name, symbol, minor_unit) VALUES
     ('ZAR', 'South African Rand', 'R', 2),
     ('USD', 'US Dollar',          '$', 2),
-    ('GBP', 'British Pound',      'Â£', 2)
+    ('GBP', 'British Pound',      '£', 2)
 ON CONFLICT (code) DO NOTHING;
 
 -- =============================================================
@@ -81,28 +81,28 @@ FROM (VALUES
     ('medium',    'en', 'Medium'),
     ('high',      'en', 'High'),
     ('very_high', 'en', 'Very High'),
-    ('low',       'ar', 'Ù…Ù†Ø®ÙØ¶'),
-    ('medium',    'ar', 'Ù…ØªÙˆØ³Ø·'),
-    ('high',      'ar', 'Ù…Ø±ØªÙØ¹'),
-    ('very_high', 'ar', 'Ù…Ø±ØªÙØ¹ Ø¬Ø¯Ø§Ù‹'),
+    ('low',       'ar', 'منخفض'),
+    ('medium',    'ar', 'متوسط'),
+    ('high',      'ar', 'مرتفع'),
+    ('very_high', 'ar', 'مرتفع جداً'),
     ('low',       'es', 'Bajo'),
     ('medium',    'es', 'Medio'),
     ('high',      'es', 'Alto'),
     ('very_high', 'es', 'Muy alto'),
     ('low',       'fr', 'Faible'),
     ('medium',    'fr', 'Moyen'),
-    ('high',      'fr', 'Ã‰levÃ©'),
-    ('very_high', 'fr', 'TrÃ¨s Ã©levÃ©'),
-    ('low',       'zh', 'ä½Ž'),
-    ('medium',    'zh', 'ä¸­'),
-    ('high',      'zh', 'é«˜'),
-    ('very_high', 'zh', 'éžå¸¸é«˜')
+    ('high',      'fr', 'Élevé'),
+    ('very_high', 'fr', 'Très élevé'),
+    ('low',       'zh', '低'),
+    ('medium',    'zh', '中'),
+    ('high',      'zh', '高'),
+    ('very_high', 'zh', '非常高')
 ) AS v(level_code, lang_code, label)
 JOIN languages l ON l.code = v.lang_code
 ON CONFLICT (level_code, language_id, start_date) DO NOTHING;
 
 -- =============================================================
--- 6. Messages â€” customer_status_labels
+-- 6. Messages — customer_status_labels
 -- =============================================================
 INSERT INTO messages (message_code, message_text, description)
 VALUES (
@@ -121,16 +121,16 @@ VALUES (
             "Converted":          "Converted"
         },
         "ar": {
-            "Pending":            "Ù…Ø¹Ù„Ù‘Ù‚",
-            "Contacted":          "ØªÙ… Ø§Ù„ØªÙˆØ§ØµÙ„",
-            "Qualified":          "Ù…Ø¤Ù‡ÙŽÙ‘Ù„",
-            "Not-Qualified":      "ØºÙŠØ± Ù…Ø¤Ù‡ÙŽÙ‘Ù„",
-            "No-Response":        "Ù„Ø§ ÙŠÙˆØ¬Ø¯ Ø±Ø¯",
-            "Bad-Contact":        "Ø¨ÙŠØ§Ù†Ø§Øª Ø§ØªØµØ§Ù„ Ø®Ø§Ø·Ø¦Ø©",
-            "Duplicate":          "Ù…ÙƒØ±ÙŽÙ‘Ø±",
-            "Callback-Requested": "Ø·Ù„Ø¨ Ù…Ø¹Ø§ÙˆØ¯Ø© Ø§Ù„Ø§ØªØµØ§Ù„",
-            "Withdrawn":          "Ù…Ù†Ø³Ø­Ø¨",
-            "Converted":          "Ù…ÙØ­ÙˆÙŽÙ‘Ù„"
+            "Pending":            "معلق",
+            "Contacted":          "تم التواصل",
+            "Qualified":          "مؤهَّل",
+            "Not-Qualified":      "غير مؤهَّل",
+            "No-Response":        "لا يوجد رد",
+            "Bad-Contact":        "بيانات اتصال خاطئة",
+            "Duplicate":          "مكرَّر",
+            "Callback-Requested": "طلب معاودة الاتصال",
+            "Withdrawn":          "منسحب",
+            "Converted":          "مُحوَّل"
         },
         "es": {
             "Pending":            "Pendiente",
@@ -140,33 +140,33 @@ VALUES (
             "No-Response":        "Sin respuesta",
             "Bad-Contact":        "Contacto incorrecto",
             "Duplicate":          "Duplicado",
-            "Callback-Requested": "Solicitud de devoluciÃ³n de llamada",
+            "Callback-Requested": "Solicitud de devolución de llamada",
             "Withdrawn":          "Retirado",
             "Converted":          "Convertido"
         },
         "fr": {
             "Pending":            "En attente",
-            "Contacted":          "ContactÃ©",
-            "Qualified":          "QualifiÃ©",
-            "Not-Qualified":      "Non qualifiÃ©",
-            "No-Response":        "Sans rÃ©ponse",
-            "Bad-Contact":        "CoordonnÃ©es erronÃ©es",
+            "Contacted":          "Contacté",
+            "Qualified":          "Qualifié",
+            "Not-Qualified":      "Non qualifié",
+            "No-Response":        "Sans réponse",
+            "Bad-Contact":        "Coordonnées erronées",
             "Duplicate":          "Doublon",
-            "Callback-Requested": "Rappel demandÃ©",
-            "Withdrawn":          "RetirÃ©",
+            "Callback-Requested": "Rappel demandé",
+            "Withdrawn":          "Retiré",
             "Converted":          "Converti"
         },
         "zh": {
-            "Pending":            "å¾…å¤„ç†",
-            "Contacted":          "å·²è”ç³»",
-            "Qualified":          "å·²åˆæ ¼",
-            "Not-Qualified":      "æœªåˆæ ¼",
-            "No-Response":        "æ— å›žå¤",
-            "Bad-Contact":        "è”ç³»æ–¹å¼é”™è¯¯",
-            "Duplicate":          "é‡å¤",
-            "Callback-Requested": "è¯·æ±‚å›žç”µ",
-            "Withdrawn":          "å·²æ’¤å›ž",
-            "Converted":          "å·²è½¬åŒ–"
+            "Pending":            "待处理",
+            "Contacted":          "已联系",
+            "Qualified":          "已合格",
+            "Not-Qualified":      "未合格",
+            "No-Response":        "无回复",
+            "Bad-Contact":        "联系方式错误",
+            "Duplicate":          "重复",
+            "Callback-Requested": "请求回电",
+            "Withdrawn":          "已撤回",
+            "Converted":          "已转化"
         }
     }'::jsonb,
     'Dashboard labels for customers.status and customer_statuses.status, keyed by language code then status code.'
@@ -176,11 +176,11 @@ SET message_text = messages.message_text || EXCLUDED.message_text,
     description  = EXCLUDED.description;
 
 -- =============================================================
--- 7. Messages â€” system prompts
+-- 7. Messages — system prompts
 -- =============================================================
 INSERT INTO messages (message_code, message_text, description) VALUES
     ('rate_limit',
-     '{"en": "I''m having trouble understanding your responses. Let''s pause this conversation for now â€” feel free to try again later, or contact us directly."}'::jsonb,
+     '{"en": "I''m having trouble understanding your responses. Let''s pause this conversation for now — feel free to try again later, or contact us directly."}'::jsonb,
      'Sent when a conversation hits the invalid-answer cap'),
 
     ('invalid_phone',
@@ -192,7 +192,7 @@ INSERT INTO messages (message_code, message_text, description) VALUES
      'Sent when an email answer fails validation'),
 
     ('empty_answer',
-     '{"en": "Sorry, I didn''t catch that â€” could you answer again?"}'::jsonb,
+     '{"en": "Sorry, I didn''t catch that — could you answer again?"}'::jsonb,
      'Sent when a mandatory question receives a blank reply'),
 
     ('radio_invalid',
@@ -217,11 +217,11 @@ INSERT INTO messages (message_code, message_text, description) VALUES
 
     ('default_confirmation',
      '{
-        "en": "Thank you {10}! That''s everything we need â€” our team will be in touch shortly.",
-        "ar": "Ø´ÙƒØ±Ø§Ù‹ Ù„Ùƒ {10}! Ù‡Ø°Ø§ ÙƒÙ„ Ù…Ø§ Ù†Ø­ØªØ§Ø¬Ù‡ â€” Ø³ÙŠØªÙˆØ§ØµÙ„ Ù…Ø¹Ùƒ ÙØ±ÙŠÙ‚Ù†Ø§ Ù‚Ø±ÙŠØ¨Ø§Ù‹.",
-        "es": "Â¡Gracias, {10}! Eso es todo lo que necesitamos â€” nuestro equipo se pondrÃ¡ en contacto pronto.",
-        "fr": "Merci {10} ! C''est tout ce dont nous avons besoin â€” notre Ã©quipe vous contactera bientÃ´t.",
-        "zh": "è°¢è°¢æ‚¨ï¼Œ{10}ï¼æˆ‘ä»¬éœ€è¦çš„ä¿¡æ¯å·²ç»é½å…¨â€”â€”æˆ‘ä»¬çš„å›¢é˜Ÿä¼šå°½å¿«ä¸Žæ‚¨è”ç³»ã€‚"
+        "en": "Thank you {10}! That''s everything we need — our team will be in touch shortly.",
+        "ar": "شكراً لك {10}! هذا كل ما نحتاجه — سيتواصل معك فريقنا قريباً.",
+        "es": "¡Gracias, {10}! Eso es todo lo que necesitamos — nuestro equipo se pondrá en contacto pronto.",
+        "fr": "Merci {10} ! C''est tout ce dont nous avons besoin — notre équipe vous contactera bientôt.",
+        "zh": "谢谢您，{10}！我们需要的信息已经齐全——我们的团队会尽快与您联系。"
      }'::jsonb,
      'Fallback confirmation sent when an ad has no ad_confirmations row'),
 
@@ -232,30 +232,30 @@ INSERT INTO messages (message_code, message_text, description) VALUES
     ('default_reopen_prompt',
      '{
         "en": "Thanks for reaching out again, {10}. Your previous enquiry is with our team. Would you like to start a new enquiry?",
-        "ar": "Ø´ÙƒØ±Ø§Ù‹ Ù„ØªÙˆØ§ØµÙ„Ùƒ Ù…Ø±Ø© Ø£Ø®Ø±Ù‰ØŒ {10}. Ø§Ø³ØªÙØ³Ø§Ø±Ùƒ Ø§Ù„Ø³Ø§Ø¨Ù‚ Ù‚ÙŠØ¯ Ø§Ù„Ù…Ø¹Ø§Ù„Ø¬Ø© Ù…Ù† Ù‚Ø¨Ù„ ÙØ±ÙŠÙ‚Ù†Ø§. Ù‡Ù„ ØªØ±ØºØ¨ ÙÙŠ Ø¨Ø¯Ø¡ Ø§Ø³ØªÙØ³Ø§Ø± Ø¬Ø¯ÙŠØ¯ØŸ",
-        "es": "Gracias por contactarnos de nuevo, {10}. Su consulta anterior estÃ¡ con nuestro equipo. Â¿Le gustarÃ­a iniciar una nueva consulta?",
-        "fr": "Merci de nous avoir recontactÃ©s, {10}. Votre demande prÃ©cÃ©dente est entre les mains de notre Ã©quipe. Souhaitez-vous commencer une nouvelle demande ?",
-        "zh": "æ„Ÿè°¢æ‚¨å†æ¬¡è”ç³»æˆ‘ä»¬ï¼Œ{10}ã€‚æ‚¨ä¹‹å‰çš„å’¨è¯¢å·²ç”±æˆ‘ä»¬çš„å›¢é˜Ÿå¤„ç†ã€‚æ‚¨æƒ³å¼€å§‹æ–°çš„å’¨è¯¢å—ï¼Ÿ"
+        "ar": "شكراً لتواصلك مرة أخرى، {10}. استفسارك السابق قيد المعالجة من قبل فريقنا. هل ترغب في بدء استفسار جديد؟",
+        "es": "Gracias por contactarnos de nuevo, {10}. Su consulta anterior está con nuestro equipo. ¿Le gustaría iniciar una nueva consulta?",
+        "fr": "Merci de nous avoir recontactés, {10}. Votre demande précédente est entre les mains de notre équipe. Souhaitez-vous commencer une nouvelle demande ?",
+        "zh": "感谢您再次联系我们，{10}。您之前的咨询已由我们的团队处理。您想开始新的咨询吗？"
      }'::jsonb,
      'Fallback reopen prompt body, when an ad has no ad_reopen_prompts row'),
 
     ('default_reopen_button_title',
      '{
         "en": "Yes, start fresh",
-        "ar": "Ù†Ø¹Ù…ØŒ Ø§Ø¨Ø¯Ø£ Ù…Ù† Ø¬Ø¯ÙŠØ¯",
-        "es": "SÃ­, empezar de nuevo",
+        "ar": "نعم، ابدأ من جديد",
+        "es": "Sí, empezar de nuevo",
         "fr": "Oui, recommencer",
-        "zh": "æ˜¯çš„ï¼Œé‡æ–°å¼€å§‹"
+        "zh": "是的，重新开始"
      }'::jsonb,
      'Fallback label for the reopen button'),
 
     ('default_forward_button_title',
      '{
         "en": "No, just pass this on",
-        "ar": "Ù„Ø§ØŒ ÙÙ‚Ø· Ù…Ø±Ù‘Ø± Ù‡Ø°Ø§",
-        "es": "No, solo reenvÃ­elo",
+        "ar": "لا، فقط مرّر هذا",
+        "es": "No, solo reenvíelo",
         "fr": "Non, transmettez simplement",
-        "zh": "ä¸ï¼Œåªæ˜¯è½¬è¾¾ä¸€ä¸‹"
+        "zh": "不，只是转达一下"
      }'::jsonb,
      'Fallback label for the forward button')
 ON CONFLICT (message_code) DO NOTHING;
@@ -353,7 +353,7 @@ VALUES ('ask_ai_chunk_limit', 10, 'integer', 'Number of RAG chunks to retrieve f
 ON CONFLICT (setting_key) DO UPDATE SET setting_value = 10;
 
 -- =============================================================
--- 13. Website Chat Limits (Added)
+-- 13. Website Chat Limits
 -- =============================================================
 INSERT INTO settings (setting_key, setting_value, setting_type, description)
 VALUES 

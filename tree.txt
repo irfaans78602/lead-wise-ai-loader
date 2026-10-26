@@ -30,12 +30,12 @@ Folder: C:\Irfaan\leadwiseai\lead-wise-ai-loader
 |   |   +---10-rag-schema.sql
 |   |   \---neon tiers.txt
 |   \---website
-|       +---00-lead-wise-ai-drop.sql
-|       +---10-lead-wise-ai-schema.sql
-|       +---20-lead-wise-ai-seed-base.sql
-|       +---30-lead-wise-ai-seed-pricing-zar.sql
-|       +---40-lead-wise-ai-seed-pricing-gbp.sql
-|       \---50-lead-wise-ai-seed-pricing-usd.sql
+|       +---00-drop-website.sql
+|       +---10-schema-website.sql
+|       +---20-seed-base-website.sql
+|       +---30-seed-pricing-zar-website.sql
+|       +---40-seed-pricing-gbp-website.sql
+|       \---50-seed-pricing-usd-website.sql
 +---src
 |   \---loader
 |       +---__pycache__ [excluded]

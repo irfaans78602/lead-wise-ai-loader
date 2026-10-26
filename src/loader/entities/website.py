@@ -21,7 +21,7 @@ CLIENTS = EntitySpec(
         "email_to": "email_to",
         "email_cc": "email_cc",
         "email_bcc": "email_bcc",
-        "sms_numbers": "sms_numbers", # ADDED
+        "sms_numbers": "sms_numbers",
         "country_code": "country_id",
         "segment_code": "segment_id",
         "currency_code": "currency_id",
@@ -69,7 +69,7 @@ ADS = EntitySpec(
         "email_to": "email_to",
         "email_cc": "email_cc",
         "email_bcc": "email_bcc",
-        "sms_numbers": "sms_numbers", # ADDED
+        "sms_numbers": "sms_numbers",
         "reopen_policy": "reopen_policy",
         "language_code": "language_id",
         "start_date": "start_date",
@@ -193,6 +193,34 @@ PRICING_DISCOUNTS = EntitySpec(
 )
 
 
+# ---------------------------------------------------------------------
+# Runtime Logs
+# ---------------------------------------------------------------------
+
+LIVE_CHAT_LOGS = EntitySpec(
+    name="live_chat_logs",
+    table="live_chat_logs",
+    pk_col="submission_id",
+    pk_kind="live_chat_log",
+    natural_key=("submission_id",),
+    columns={
+        "client_key": "client_id",
+        "ad_key": "ad_id",
+        "session_id": "session_id",
+        "question": "question",
+        "answer": "answer",
+        "locale": "locale",
+        "ip_hash": "ip_hash",
+        "utm_source": "utm_source",
+        "utm_medium": "utm_medium",
+        "utm_campaign": "utm_campaign",
+        "section_path": "section_path",
+        "status": "status",
+        "created_at": "created_at",
+    },
+)
+
+
 ALL = {
     spec.name: spec
     for spec in (
@@ -205,5 +233,6 @@ ALL = {
         FAQS,
         QUALIFICATION_SCORE,
         PRICING_DISCOUNTS,
+        LIVE_CHAT_LOGS,
     )
 }

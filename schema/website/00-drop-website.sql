@@ -8,7 +8,9 @@ BEGIN;
 -- -------------------------------------------------------------
 -- Views first (they reference tables, drop before them)
 -- -------------------------------------------------------------
-DROP VIEW IF EXISTS v_live_chat_by_question        CASCADE;
+DROP VIEW IF EXISTS v_live_chat_dropoff             CASCADE;
+DROP VIEW IF EXISTS v_live_chat_funnel              CASCADE;
+DROP VIEW IF EXISTS v_live_chat_by_question         CASCADE;
 DROP VIEW IF EXISTS active_ads_with_merged_emails  CASCADE;
 DROP VIEW IF EXISTS active_ads_with_active_clients CASCADE;
 DROP VIEW IF EXISTS active_client_users            CASCADE;
@@ -28,7 +30,7 @@ DROP VIEW IF EXISTS active_pricing_website         CASCADE;
 DROP VIEW IF EXISTS active_pricing_rates           CASCADE;
 DROP VIEW IF EXISTS active_pricing_segment_tiers   CASCADE;
 DROP VIEW IF EXISTS active_pricing_tiers           CASCADE;
-DROP VIEW IF EXISTS active_settings                CASCADE; -- Dropping just in case it existed previously
+DROP VIEW IF EXISTS active_settings                CASCADE;
 DROP VIEW IF EXISTS active_messages                CASCADE;
 DROP VIEW IF EXISTS active_segments                CASCADE;
 DROP VIEW IF EXISTS active_countries               CASCADE;
@@ -62,10 +64,8 @@ DROP FUNCTION IF EXISTS set_updated_at()                   CASCADE;
 
 -- -------------------------------------------------------------
 -- Tables in reverse dependency order
--- Children first, then parents.
 -- -------------------------------------------------------------
-
--- Deepest dependents first
+DROP TABLE IF EXISTS live_chat_logs           CASCADE;
 DROP TABLE IF EXISTS customer_statuses        CASCADE;
 DROP TABLE IF EXISTS qualifications           CASCADE;
 DROP TABLE IF EXISTS answers                  CASCADE;
@@ -75,17 +75,14 @@ DROP TABLE IF EXISTS contacts                 CASCADE;
 DROP TABLE IF EXISTS invoice_payments         CASCADE;
 DROP TABLE IF EXISTS message_rate_limits      CASCADE;
 
--- Content tables (children of ads)
 DROP TABLE IF EXISTS ad_confirmations         CASCADE;
 DROP TABLE IF EXISTS ad_reopen_prompts        CASCADE;
 DROP TABLE IF EXISTS faqs                     CASCADE;
 DROP TABLE IF EXISTS qualification_score      CASCADE;
 DROP TABLE IF EXISTS qualification_levels     CASCADE;
 
--- Ad parents
 DROP TABLE IF EXISTS ads                      CASCADE;
 
--- Client children
 DROP TABLE IF EXISTS client_messages          CASCADE;
 DROP TABLE IF EXISTS client_users             CASCADE;
 DROP TABLE IF EXISTS agency_users             CASCADE;
@@ -95,19 +92,16 @@ DROP TABLE IF EXISTS pricing_website          CASCADE;
 DROP TABLE IF EXISTS pricing_rates            CASCADE;
 DROP TABLE IF EXISTS pricing_segment_tiers    CASCADE;
 
--- Client parent
 DROP TABLE IF EXISTS clients                  CASCADE;
 
--- Lookup tables
 DROP TABLE IF EXISTS agencies                 CASCADE;
 DROP TABLE IF EXISTS segments                 CASCADE;
 DROP TABLE IF EXISTS countries                CASCADE;
 DROP TABLE IF EXISTS currencies               CASCADE;
 DROP TABLE IF EXISTS languages                CASCADE;
 
--- Standalone
 DROP TABLE IF EXISTS messages                 CASCADE;
-DROP TABLE IF EXISTS settings                 CASCADE; -- Remove from Website DB
+DROP TABLE IF EXISTS settings                 CASCADE;
 DROP TABLE IF EXISTS pricing_tiers            CASCADE;
 
 COMMIT;

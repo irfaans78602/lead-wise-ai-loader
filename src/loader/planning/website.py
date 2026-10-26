@@ -107,6 +107,9 @@ def _plan_payload(payload: dict, plan: Plan, source: str):
     if matrix:
         _plan_ad_matrix(matrix, plan, source)
 
+    for log in payload.get("live_chat_logs", []):
+        _plan_live_chat_log(log, plan, source)
+
 
 def _resolve_client_ref(plan: Plan, client_key: str):
     client_id = plan.refs.get(("client", client_key))
@@ -124,7 +127,6 @@ def _plan_client(client: dict, plan: Plan, source: str):
 
     payload = {"client_id": client_id}
     
-    # This loop automatically picks up 'sms_numbers' because it's in spec.columns
     for json_field, pg_col in spec.columns.items():
         if json_field in client:
             payload[pg_col] = client[json_field]
@@ -277,7 +279,7 @@ def _plan_root_ad(root: dict, plan: Plan, source: str):
             "source_ad_id": require(root, "source_ad_id", "root_ad"),
             "ad_name": require(root, "ad_name", "root_ad"),
             "is_placeholder": root.get("is_placeholder", True),
-            "sms_numbers": root.get("sms_numbers", {}), # ADDED
+            "sms_numbers": root.get("sms_numbers", {}),
             "language_code": root.get("language_code"),
             "reopen_policy": root.get("reopen_policy"),
             "reuse_root": None,
@@ -356,7 +358,7 @@ def _plan_ad_matrix(matrix: dict, plan: Plan, source: str):
                     "source_ad_id": source_id,
                     "ad_name": name,
                     "is_placeholder": matrix.get("is_placeholder", True),
-                    "sms_numbers": matrix.get("sms_numbers", {}), # ADDED
+                    "sms_numbers": matrix.get("sms_numbers", {}),
                     "language_code": loc,
                     "reuse_root": root_source_id,
                 },
@@ -479,5 +481,46 @@ def _plan_qualification_score(ad_id, source_id, band, plan, source):
             "end_date": band.get("end_date", "9999-12-31"),
         },
         logical_key=(source_id, "qscore", level_code, start_date),
+        source_path=source,
+    ))
+
+
+def _plan_live_chat_log(log: dict, plan: Plan, source: str):
+    spec = entities.LIVE_CHAT_LOGS
+    
+    submission_id = require(log, "submission_id", "live_chat_logs")
+    try:
+        submission_id = uuid.UUID(str(submission_id))
+    except ValueError as e:
+        raise FileError(f"live_chat_logs: submission_id {submission_id!r} is not a valid UUID") from e
+
+    client_key = require(log, "client_key", "live_chat_logs")
+    ad_key = require(log, "ad_key", "live_chat_logs")
+
+    client_id = plan.refs.get(("client", client_key))
+    if not client_id:
+        raise FileError(f"live_chat_logs references unknown client_key: {client_key}")
+
+    ad_id = plan.refs.get(("ad", ad_key))
+    if not ad_id:
+        raise FileError(f"live_chat_logs references unknown ad_key: {ad_key}")
+
+    payload: dict[str, Any] = {
+        "submission_id": submission_id,
+        "client_id": client_id,
+        "ad_id": ad_id,
+    }
+
+    for json_field, pg_col in spec.columns.items():
+        if json_field in ("client_key", "ad_key"):
+            continue
+        if json_field in log:
+            payload[pg_col] = log[json_field]
+
+    plan.add(PlanOp(
+        spec=spec,
+        pk=submission_id,
+        payload=payload,
+        logical_key=(str(submission_id),),
         source_path=source,
     ))

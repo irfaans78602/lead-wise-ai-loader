@@ -197,12 +197,15 @@ WHERE c.status IN ('active', 'trial')
 -- -------------------------------------------------------------
 -- 8. Settings
 -- -------------------------------------------------------------
+-- CHANGED: setting_value is TEXT instead of NUMERIC(10,4) so it
+-- can store both numbers and string secrets (like the test harness
+-- key). setting_type now includes 'string' for validation.
 CREATE TABLE settings (
     setting_id     BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     setting_key    TEXT NOT NULL UNIQUE,
-    setting_value  NUMERIC(10,4) NOT NULL,
+    setting_value  TEXT NOT NULL,
     setting_type   TEXT NOT NULL DEFAULT 'number'
-                   CHECK (setting_type IN ('number','boolean','integer')),
+                   CHECK (setting_type IN ('number','boolean','integer','string')),
     description    TEXT,
     start_date     DATE NOT NULL DEFAULT '1900-01-01',
     end_date       DATE NOT NULL DEFAULT '9999-12-31',

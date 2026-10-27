@@ -257,7 +257,39 @@ INSERT INTO messages (message_code, message_text, description) VALUES
         "fr": "Non, transmettez simplement",
         "zh": "不，只是转达一下"
      }'::jsonb,
-     'Fallback label for the forward button')
+     'Fallback label for the forward button'),
+
+    ('contact_ack_subject',
+     '{"en": "We''ve received your message"}',
+     'Subject line for contact form auto-reply'),
+
+    ('contact_ack_greeting',
+     '{"en": "Hi {name},"}',
+     'Greeting for contact form auto-reply'),
+
+    ('contact_ack_body',
+     '{"en": "Thanks for getting in touch with LeadWise AI. Your message has been received."}',
+     'Body text for contact form auto-reply'),
+
+    ('contact_ack_reference',
+     '{"en": "Reference"}',
+     'Reference label'),
+
+    ('contact_ack_confirm',
+     '{"en": "A person reads your enquiry and replies within a few hours, any day."}',
+     'Confirmation text'),
+
+    ('contact_ack_copy_intro',
+     '{"en": "Here is a copy of what you sent us:"}',
+     'Intro for copy of message'),
+
+    ('contact_ack_message_label',
+     '{"en": "Message"}',
+     'Label for message copy'),
+
+    ('contact_ack_signoff',
+     '{"en": "The LeadWise AI team"}',
+     'Signoff text')
 ON CONFLICT (message_code) DO NOTHING;
 
 -- =============================================================
@@ -305,7 +337,7 @@ JOIN pricing_tiers t ON t.tier_code = v.tier_code
 ON CONFLICT (segment_id, start_date) DO NOTHING;
 
 -- =============================================================
--- 10. Settings (Live Chat & Operational)
+-- 10. Settings (Live Chat, Operational & Contact Form)
 -- =============================================================
 INSERT INTO settings (setting_key, setting_value, setting_type, description) VALUES
     ('schema_version', 1, 'integer', 'Loader-expected schema version'),
@@ -319,7 +351,25 @@ INSERT INTO settings (setting_key, setting_value, setting_type, description) VAL
     ('rate_limit_max_3',            200.0000,  'number', 'Max messages in window 3'),
     ('rate_limit_cleanup_hours',     48.0000,  'number', 'Prune rate-limit rows older than this'),
     ('chat_rate_limit_max',          25.0000,  'integer','Max messages per IP for Website Chat'),
-    ('chat_rate_limit_window_minutes', 60.0000,'integer','Time window in minutes for Website Chat rate limit')
+    ('chat_rate_limit_window_minutes', 60.0000,'integer','Time window in minutes for Website Chat rate limit'),
+    
+    -- Contact Form Rate Limits
+    ('contact_ip_rate_limit_window_seconds_1', 60, 'integer', 'Window 1 for contact IP rate limit'),
+    ('contact_ip_rate_limit_max_1', 3, 'integer', 'Max contact submissions per IP per window 1'),
+    ('contact_ip_rate_limit_window_seconds_2', 3600, 'integer', 'Window 2 for contact IP rate limit'),
+    ('contact_ip_rate_limit_max_2', 10, 'integer', 'Max contact submissions per IP per window 2'),
+    ('contact_email_rate_limit_window_seconds_1', 3600, 'integer', 'Window 1 for contact email rate limit'),
+    ('contact_email_rate_limit_max_1', 2, 'integer', 'Max contact submissions per email per window 1'),
+    ('contact_email_rate_limit_window_seconds_2', 86400, 'integer', 'Window 2 for contact email rate limit'),
+    ('contact_email_rate_limit_max_2', 5, 'integer', 'Max contact submissions per email per window 2'),
+
+    -- Contact Form Field Lengths
+    ('contact_max_name_len', 200, 'integer', 'Max length for name field'),
+    ('contact_max_email_len', 200, 'integer', 'Max length for email field'),
+    ('contact_max_company_len', 200, 'integer', 'Max length for company field'),
+    ('contact_max_phone_len', 50, 'integer', 'Max length for phone field'),
+    ('contact_max_enquiry_len', 100, 'integer', 'Max length for enquiry field'),
+    ('contact_max_message_len', 5000, 'integer', 'Max length for message field')
 ON CONFLICT (setting_key) DO UPDATE 
 SET setting_value = EXCLUDED.setting_value,
     setting_type = EXCLUDED.setting_type;

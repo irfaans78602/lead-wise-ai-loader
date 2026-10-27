@@ -712,7 +712,7 @@ CREATE INDEX contacts_enquiry_idx    ON contacts (enquiry) WHERE enquiry IS NOT 
 -- =============================================================
 CREATE TABLE live_chat_logs (
     log_id          BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    submission_id   UUID NOT NULL UNIQUE, -- Crucial for idempotent loader updates
+    submission_id   UUID NOT NULL UNIQUE,
     client_id       UUID NOT NULL,
     ad_id           UUID NOT NULL,
     session_id      TEXT NOT NULL,

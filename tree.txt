@@ -10,8 +10,7 @@ Folder: C:\Irfaan\leadwiseai\lead-wise-ai-loader
 |   |   \---logs [excluded]
 |   +---rag
 |   |   +---leadwise-ai
-|   |   |   +---.client-slug
-|   |   |   \---10-client.json
+|   |   |   \---.client-slug
 |   |   \---logs [excluded]
 |   \---website
 |       +---leadwise-ai
@@ -35,7 +34,8 @@ Folder: C:\Irfaan\leadwiseai\lead-wise-ai-loader
 |       +---20-seed-base-website.sql
 |       +---30-seed-pricing-zar-website.sql
 |       +---40-seed-pricing-gbp-website.sql
-|       \---50-seed-pricing-usd-website.sql
+|       +---50-seed-pricing-usd-website.sql
+|       \---99-update-contact-form settings.sql
 +---src
 |   \---loader
 |       +---__pycache__ [excluded]

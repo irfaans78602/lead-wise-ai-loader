@@ -84,7 +84,6 @@ def load_plan(json_path: str, data_root: str) -> Plan:
     payload = read_json(json_path, data_root)
     plan = Plan()
     
-    # Handle bare object (single client) 
     if isinstance(payload, dict) and "client_key" in payload and "settings" not in payload:
         payload = {"clients": [payload]}
 
@@ -127,6 +126,7 @@ def _plan_client(client: dict, plan: Plan, source: str):
 
     payload = {"client_id": client_id}
     
+    # This loop automatically picks up the new email_from_name and email_from_prefix
     for json_field, pg_col in spec.columns.items():
         if json_field in client:
             payload[pg_col] = client[json_field]

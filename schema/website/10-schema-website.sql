@@ -238,6 +238,11 @@ CREATE TABLE clients (
     email_to             TEXT NOT NULL,
     email_cc             TEXT,
     email_bcc            TEXT,
+    
+    -- NEW: Controls the "From" address in Resend
+    email_from_name      TEXT, 
+    email_from_prefix    TEXT DEFAULT 'hello', 
+    
     sms_numbers          JSONB NOT NULL DEFAULT '{}'::jsonb,
     agency_id            UUID REFERENCES agencies(agency_id) ON DELETE SET NULL,
     country_id           SMALLINT REFERENCES countries(country_id) ON DELETE RESTRICT,

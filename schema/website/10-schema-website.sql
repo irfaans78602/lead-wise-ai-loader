@@ -239,9 +239,18 @@ CREATE TABLE clients (
     email_cc             TEXT,
     email_bcc            TEXT,
     
-    -- NEW: Controls the "From" address in Resend
+    -- Controls the "From" address in Resend
     email_from_name      TEXT, 
     email_from_prefix    TEXT DEFAULT 'hello', 
+    
+    -- Data-driven response time for prospect emails (Localized)
+    response_time_expectation JSONB NOT NULL DEFAULT '{
+        "en": "few hours",
+        "es": "pocas horas",
+        "ar": "????? ?????",
+        "fr": "quelques heures",
+        "zh": "????"
+    }'::jsonb,
     
     sms_numbers          JSONB NOT NULL DEFAULT '{}'::jsonb,
     agency_id            UUID REFERENCES agencies(agency_id) ON DELETE SET NULL,

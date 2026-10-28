@@ -126,7 +126,7 @@ def _plan_client(client: dict, plan: Plan, source: str):
 
     payload = {"client_id": client_id}
     
-    # This loop automatically picks up the new email_from_name and email_from_prefix
+    # This loop automatically picks up new columns added to entities.py
     for json_field, pg_col in spec.columns.items():
         if json_field in client:
             payload[pg_col] = client[json_field]

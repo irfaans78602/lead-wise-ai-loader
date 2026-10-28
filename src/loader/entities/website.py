@@ -23,6 +23,7 @@ CLIENTS = EntitySpec(
         "email_bcc": "email_bcc",
         "email_from_name": "email_from_name",
         "email_from_prefix": "email_from_prefix",
+        "response_time_expectation": "response_time_expectation",
         "sms_numbers": "sms_numbers",
         "country_code": "country_id",
         "segment_code": "segment_id",

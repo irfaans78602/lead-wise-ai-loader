@@ -1,13 +1,10 @@
 <#
 .SYNOPSIS
-    Loads the JSON for every client folder under data/website/.
+    Loads the JSON for every client folder under a data root.
 
 .DESCRIPTION
-    Does NOT rebuild the schema. Use `loader db rebuild --profile website`
-    separately if you need to reset the schema.
-
-    For each client folder under data/website/, loads every *.json file
-    (in filename order) in one transaction.
+    For each client folder under the specified data root (default: data/website), 
+    loads every *.json file (in filename order) in one transaction.
 
 .PARAMETER Commit
     Apply the transaction. Without this, the loader runs in preview mode.
@@ -15,14 +12,22 @@
 .PARAMETER Client
     Optional. Load only this client folder. If omitted, loads all clients.
 
+.PARAMETER Profile
+    Optional. The loader profile to use. Defaults to "website".
+
+.PARAMETER DataRoot
+    Optional. The folder to look for client JSONs. Defaults to "data/website".
+
 .EXAMPLE
     .\tools\load_website.ps1 -Commit
-    .\tools\load_website.ps1 -Client leadwise-ai -Commit
+    .\tools\load_website.ps1 -Profile website_demo -DataRoot "data/website_demo" -Commit
 #>
 
 [CmdletBinding()]
 param(
     [string]$Client = "",
+    [string]$Profile = "website",
+    [string]$DataRoot = "data\website",
     [switch]$Commit
 )
 
@@ -37,17 +42,19 @@ Set-Location $RepoRoot
 Write-Host ""
 Write-Host "=== LeadWise AI: load_website.ps1 (JSON only) ===" -ForegroundColor Cyan
 Write-Host "Repo root: $RepoRoot"
+Write-Host "Profile:   $Profile"
+Write-Host "Data root: $DataRoot"
 
 # Find client folders
 if ($Client) {
-    $clientDirs = Get-ChildItem -Path "data\website" -Directory -ErrorAction SilentlyContinue |
+    $clientDirs = Get-ChildItem -Path $DataRoot -Directory -ErrorAction SilentlyContinue |
         Where-Object { $_.Name -eq $Client }
 } else {
-    $clientDirs = Get-ChildItem -Path "data\website" -Directory -ErrorAction SilentlyContinue
+    $clientDirs = Get-ChildItem -Path $DataRoot -Directory -ErrorAction SilentlyContinue
 }
 
 if (-not $clientDirs) {
-    Write-Host "ERROR: no client folders found under data/website/" -ForegroundColor Red
+    Write-Host "ERROR: no client folders found under $DataRoot/" -ForegroundColor Red
     exit 1
 }
 
@@ -62,19 +69,21 @@ foreach ($d in $clientDirs) {
     }
 
     # Build the list of relative paths (Client/file.json)
+    # Note: We pass the relative path (e.g., "leadwise-ai/10-client.json") 
+    # because the loader prepends the DATA_ROOT from the .env file.
     $inputs = @()
     foreach ($f in $jsonFiles) {
         $inputs += (Join-Path $d.Name $f.Name)
     }
 
     Write-Host ""
-    Write-Host "--- loader load $($inputs -join ', ') --profile website ---" -ForegroundColor Yellow
+    Write-Host "--- loader load $($inputs -join ', ') --profile $Profile ---" -ForegroundColor Yellow
 
     if ($Commit) {
-        loader load @inputs --profile website --commit
+        loader load @inputs --profile $Profile --commit
     } else {
         Write-Host "(preview only - pass -Commit to apply)" -ForegroundColor DarkGray
-        loader load @inputs --profile website
+        loader load @inputs --profile $Profile
     }
 
     if ($LASTEXITCODE -ne 0) {

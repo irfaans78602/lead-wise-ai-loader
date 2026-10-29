@@ -288,6 +288,19 @@ CREATE INDEX clients_sms_numbers_idx ON clients USING gin (sms_numbers);
 CREATE UNIQUE INDEX clients_one_platform_owner ON clients ((is_platform_owner)) WHERE is_platform_owner = TRUE;
 
 -- =============================================================
+-- 12.1 Demo Sessions
+-- =============================================================
+CREATE TABLE demo_sessions (
+    demo_session_id   UUID PRIMARY KEY,
+    client_id         UUID NOT NULL REFERENCES clients(client_id) ON DELETE CASCADE,
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+    last_active_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    expires_at        TIMESTAMPTZ NOT NULL DEFAULT (now() + interval '24 hours')
+);
+CREATE INDEX demo_sessions_client_idx  ON demo_sessions (client_id);
+CREATE INDEX demo_sessions_expires_idx ON demo_sessions (expires_at);
+
+-- =============================================================
 -- 13. Pricing Discounts
 -- =============================================================
 CREATE TABLE pricing_discounts (
@@ -462,6 +475,7 @@ CREATE UNIQUE INDEX faqs_current_order_unique ON faqs (ad_id, question_order) WH
 CREATE TABLE customers (
     customer_id          BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     ad_id                UUID NOT NULL REFERENCES ads(ad_id) ON DELETE CASCADE,
+    demo_session_id      UUID REFERENCES demo_sessions(demo_session_id) ON DELETE CASCADE,
     channel              TEXT NOT NULL CHECK (channel IN ('messenger','instagram','tiktok','chat')),
     channel_user_id      TEXT NOT NULL,
     status               TEXT NOT NULL DEFAULT 'Pending' CHECK (status IN (
@@ -481,6 +495,7 @@ CREATE TABLE customers (
 CREATE INDEX customers_ad_status_idx     ON customers (ad_id, status);
 CREATE INDEX customers_qualification_idx ON customers (qualification_id);
 CREATE INDEX idx_customers_ip_hash       ON customers (ip_hash);
+CREATE INDEX customers_demo_session_idx  ON customers (demo_session_id) WHERE demo_session_id IS NOT NULL;
 
 -- =============================================================
 -- 20. Conversations
@@ -582,7 +597,7 @@ CREATE INDEX qualifications_qualified_at_idx ON qualifications (qualified_at);
 CREATE TABLE client_users (
     client_user_id       BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     client_id            UUID REFERENCES clients(client_id) ON DELETE CASCADE,
-    google_sub           TEXT NOT NULL,
+    google_sub           TEXT NULL, -- ALLOW NULL FOR PENDING INVITES
     email                TEXT NOT NULL,
     display_name         TEXT,
     role                 TEXT NOT NULL DEFAULT 'viewer' CHECK (role IN ('owner','admin','viewer')),
@@ -596,8 +611,8 @@ CREATE TABLE client_users (
     CHECK (start_date <= end_date)
 );
 CREATE INDEX client_users_client_idx ON client_users (client_id);
-CREATE INDEX client_users_email_idx  ON client_users (lower(email));
 CREATE INDEX client_users_active_idx ON client_users (client_id, start_date, end_date);
+CREATE UNIQUE INDEX client_users_email_unique ON client_users (lower(email));
 
 -- =============================================================
 -- 26. Agency Users
@@ -605,7 +620,7 @@ CREATE INDEX client_users_active_idx ON client_users (client_id, start_date, end
 CREATE TABLE agency_users (
     agency_user_id       BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     agency_id            UUID NOT NULL REFERENCES agencies(agency_id) ON DELETE CASCADE,
-    google_sub           TEXT NOT NULL,
+    google_sub           TEXT NULL, -- ALLOW NULL FOR PENDING INVITES
     email                TEXT NOT NULL,
     display_name         TEXT,
     role                 TEXT NOT NULL DEFAULT 'viewer' CHECK (role IN ('owner','admin','viewer')),
@@ -619,8 +634,8 @@ CREATE TABLE agency_users (
     CHECK (start_date <= end_date)
 );
 CREATE INDEX agency_users_agency_idx ON agency_users (agency_id);
-CREATE INDEX agency_users_email_idx  ON agency_users (lower(email));
 CREATE INDEX agency_users_active_idx ON agency_users (agency_id, start_date, end_date);
+CREATE UNIQUE INDEX agency_users_email_unique ON agency_users (lower(email));
 
 -- =============================================================
 -- 27. Customer Statuses
@@ -729,6 +744,7 @@ CREATE TABLE live_chat_logs (
     submission_id   UUID NOT NULL UNIQUE,
     client_id       UUID NOT NULL,
     ad_id           UUID NOT NULL,
+    demo_session_id UUID REFERENCES demo_sessions(demo_session_id) ON DELETE CASCADE,
     session_id      TEXT NOT NULL,
     question        TEXT NOT NULL,
     answer          TEXT,
@@ -744,6 +760,7 @@ CREATE TABLE live_chat_logs (
 CREATE INDEX live_chat_logs_client_idx ON live_chat_logs (client_id, created_at DESC);
 CREATE INDEX live_chat_logs_ad_idx ON live_chat_logs (ad_id, created_at DESC);
 CREATE INDEX live_chat_logs_ip_idx ON live_chat_logs (ip_hash, created_at DESC) WHERE ip_hash IS NOT NULL;
+CREATE INDEX live_chat_logs_demo_session_idx ON live_chat_logs (demo_session_id) WHERE demo_session_id IS NOT NULL;
 
 -- =============================================================
 -- 32. Settings (Live Chat & Operational Settings)

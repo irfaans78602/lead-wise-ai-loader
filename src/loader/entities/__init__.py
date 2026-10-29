@@ -18,9 +18,10 @@ class EntitySpec:
 from loader.entities import website, master, rag  # noqa: E402
 
 _REGISTRIES = {
-    "master":   master,
-    "rag":      rag,
-    "website": website,
+    "master":       master,
+    "rag":          rag,
+    "website":      website,
+    "website_demo": website,
 }
 
 def for_profile(name: str):

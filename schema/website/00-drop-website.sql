@@ -71,6 +71,7 @@ DROP TABLE IF EXISTS qualifications           CASCADE;
 DROP TABLE IF EXISTS answers                  CASCADE;
 DROP TABLE IF EXISTS conversations            CASCADE;
 DROP TABLE IF EXISTS customers                CASCADE;
+DROP TABLE IF EXISTS demo_sessions            CASCADE;
 DROP TABLE IF EXISTS contacts                 CASCADE;
 DROP TABLE IF EXISTS invoice_payments         CASCADE;
 DROP TABLE IF EXISTS message_rate_limits      CASCADE;

@@ -2,18 +2,19 @@
 config.py
 Reads and validates configuration from environment and CLI.
 
-Three profiles are supported - master, rag, website - each configured
+Four profiles are supported - master, rag, website, website_demo - each configured
 from a dedicated .env file:
 
-    .env.master      MASTER_*
-    .env.rag         RAG_*
-    .env.website     WEBSITE_*
+    .env.master         MASTER_*
+    .env.rag            RAG_*
+    .env.website        WEBSITE_*
+    .env.website_demo   WEBSITE_DEMO_*
 
 Plus one loader-only file with no profile prefix:
 
     .env.loader      LW_*
 
-Per-profile variables (PREFIX = MASTER | RAG | WEBSITE):
+Per-profile variables (PREFIX = MASTER | RAG | WEBSITE | WEBSITE_DEMO):
 
     <PREFIX>_DATABASE_URL              required to enable the profile
     <PREFIX>_DATA_ROOT                 default ./data/<profile>
@@ -26,13 +27,14 @@ Precedence (earlier wins; real environment variables always win):
   3. <repo_root>/.env.master
   4. <repo_root>/.env.rag
   5. <repo_root>/.env.website
+  6. <repo_root>/.env.website_demo
 
-(Files are read in the order 2-5 and a key is only set if it is not
+(Files are read in the order 2-6 and a key is only set if it is not
 already in the environment, so the first definition of a key wins.)
 
 A profile whose <PREFIX>_DATABASE_URL is unset is absent from
 `Config.profiles`. LW_ENV_DIR (tests/CI) replaces <repo_root> as the
-directory the four .env files are read from.
+directory the five .env files are read from.
 """
 
 import os
@@ -42,8 +44,8 @@ from pathlib import Path
 from loader.errors import ConfigError
 
 
-_PROFILE_NAMES = ("master", "rag", "website")
-_ENV_FILES = (".env.loader", ".env.master", ".env.rag", ".env.website")
+_PROFILE_NAMES = ("master", "rag", "website", "website_demo")
+_ENV_FILES = (".env.loader", ".env.master", ".env.rag", ".env.website", ".env.website_demo")
 
 _LOADED_FLAG = "_lw_dotenv_loaded"
 
@@ -145,7 +147,7 @@ def load(
     if not profiles:
         raise ConfigError(
             "no profiles configured: set MASTER_DATABASE_URL, "
-            "RAG_DATABASE_URL, and/or WEBSITE_DATABASE_URL"
+            "RAG_DATABASE_URL, WEBSITE_DATABASE_URL, and/or WEBSITE_DEMO_DATABASE_URL"
         )
 
     default = (

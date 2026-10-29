@@ -4,9 +4,10 @@ from loader.planning import website, master, rag
 
 # Each value is a callable: load_plan(json_path, data_root) -> Plan
 _PLANNERS = {
-    "master":  master.load_plan,
-    "rag":     rag.load_plan,
-    "website": website.load_plan,
+    "master":       master.load_plan,
+    "rag":          rag.load_plan,
+    "website":      website.load_plan,
+    "website_demo": website.load_plan,
 }
 
 

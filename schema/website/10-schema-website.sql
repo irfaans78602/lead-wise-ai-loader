@@ -247,9 +247,9 @@ CREATE TABLE clients (
     response_time_expectation JSONB NOT NULL DEFAULT '{
         "en": "few hours",
         "es": "pocas horas",
-        "ar": "????? ?????",
+        "ar": "ساعات قليلة",
         "fr": "quelques heures",
-        "zh": "????"
+        "zh": "几个小时"
     }'::jsonb,
     
     sms_numbers          JSONB NOT NULL DEFAULT '{}'::jsonb,
@@ -268,6 +268,13 @@ CREATE TABLE clients (
     allowed_origins      TEXT NOT NULL DEFAULT ''
                          CHECK (allowed_origins = ''
                                 OR allowed_origins ~ '^https?://[a-z0-9.-]+(:[0-9]{1,5})?(,https?://[a-z0-9.-]+(:[0-9]{1,5})?)*$'),
+
+    -- Data-driven display columns for the Leads table (faqs.question_id references)
+	lead_transactions_title      JSONB,
+    display_first_name_question_id SMALLINT,
+    display_last_name_question_id  SMALLINT,
+    display_contact_question_id    SMALLINT,
+
     start_date           DATE NOT NULL DEFAULT '1900-01-01',
     end_date             DATE NOT NULL DEFAULT '9999-12-31',
     created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),

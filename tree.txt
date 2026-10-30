@@ -65,10 +65,12 @@ Folder: C:\Irfaan\leadwiseai\lead-wise-ai-loader
 |       \---write.py
 +---tools
 |   +---collect-file-contents.ps1
+|   +---gen_demo_data.ps1
+|   +---generate_demo_data.py
+|   +---load_demo.ps1
 |   +---load_master.ps1
 |   +---load_rag.ps1
 |   +---load_website.ps1
-|   +---rename_leadwise_to_website.ps1
 |   \---tree.ps1
 +---.dockerignore
 +---.env.loader

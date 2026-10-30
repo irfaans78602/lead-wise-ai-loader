@@ -1,38 +1,9 @@
 """
 schema.py
-Applies SQL from the schema repo. Subcommands: drop, create, seed,
-rebuild. All SQL files are read directly from the profile's schema
-root (<PREFIX>_SCHEMA_ROOT, or --schema-root on the command line).
+Applies SQL from the schema repo.
 
-Layout the loader expects:
-
-    <schema_root>/
-        00-*-drop.sql
-        10-*-schema.sql
-        20-*-seed-base.sql
-        30-*-seed-pricing-*.sql
-        ...
-        _archive/     historical snapshots    -- never executed
-        _cleanup/     manual clean-up scripts -- never executed
-
-Only *.sql files at the schema root are executed. Any subfolder is
-invisible to the loader.
-
-Files are bucketed by their two-digit numeric prefix:
-
-    00          drop
-    10          schema
-    20 .. 89    seeds, applied in ascending filename order
-
-Prefixes 90 and above are not part of the loader's flow.
-
-Each SQL file is a self-contained transaction (BEGIN; ... COMMIT;).
-The loader therefore runs them under autocommit -- otherwise psycopg2's
-implicit transaction collides with the file's BEGIN and raises
-ActiveSqlTransaction.
-
-Progress is printed to stdout as each file is applied, with a short
-elapsed-time marker. The final line is <action>: ok from the CLI.
+If commit=False (default), the operations are executed in a transaction
+and then rolled back. Pass commit=True to apply the changes.
 """
 
 import sys
@@ -53,7 +24,6 @@ def _all_sql_files(schema_root: str) -> list[Path]:
 
 
 def _bucket(files: list[Path]) -> dict[str, list[Path]]:
-    """Group files by their two-digit numeric prefix: '00', '10', ..."""
     buckets: dict[str, list[Path]] = {}
     for p in files:
         prefix = p.name.split("-", 1)[0]
@@ -64,7 +34,6 @@ def _bucket(files: list[Path]) -> dict[str, list[Path]]:
 
 
 def _seed_files(buckets: dict[str, list[Path]]) -> list[Path]:
-    """Files with prefix 20 through 89, in ascending order."""
     out: list[Path] = []
     for prefix in sorted(buckets):
         n = int(prefix)
@@ -93,35 +62,47 @@ def _run_sql_file(conn, path: Path):
     print(f"  -> {path.name} ({size_kb} KB) ... ", end="", flush=True)
     t0 = time.monotonic()
     sql = path.read_text(encoding="utf-8")
-    previous = conn.autocommit
-    conn.autocommit = True
+    
     try:
         with conn.cursor() as cur:
             cur.execute(sql)
     except Exception:
         print("FAILED")
         raise
-    finally:
-        conn.autocommit = previous
     dt = time.monotonic() - t0
     print(f"ok ({dt:.2f}s)")
 
 
-def drop(conn, schema_root: str):
+def _execute_step(conn, path: Path):
+    # We do NOT set autocommit here. The caller manages the transaction.
+    _run_sql_file(conn, path)
+
+
+def drop(conn, schema_root: str, commit: bool = False):
     buckets = _bucket(_all_sql_files(schema_root))
     path = _require_one(buckets, "00", "drop", schema_root)
     print("drop:")
-    _run_sql_file(conn, path)
+    _execute_step(conn, path)
+    if not commit:
+        print("  (dry-run: rolled back)")
+        conn.rollback()
+    else:
+        conn.commit()
 
 
-def create(conn, schema_root: str):
+def create(conn, schema_root: str, commit: bool = False):
     buckets = _bucket(_all_sql_files(schema_root))
     path = _require_one(buckets, "10", "schema", schema_root)
     print("create:")
-    _run_sql_file(conn, path)
+    _execute_step(conn, path)
+    if not commit:
+        print("  (dry-run: rolled back)")
+        conn.rollback()
+    else:
+        conn.commit()
 
 
-def seed(conn, schema_root: str):
+def seed(conn, schema_root: str, commit: bool = False):
     buckets = _bucket(_all_sql_files(schema_root))
     files = _seed_files(buckets)
     if not files:
@@ -129,10 +110,39 @@ def seed(conn, schema_root: str):
         return
     print("seed:")
     for path in files:
-        _run_sql_file(conn, path)
+        _execute_step(conn, path)
+    if not commit:
+        print("  (dry-run: rolled back)")
+        conn.rollback()
+    else:
+        conn.commit()
 
 
-def rebuild(conn, schema_root: str):
-    drop(conn, schema_root)
-    create(conn, schema_root)
-    seed(conn, schema_root)
+def rebuild(conn, schema_root: str, commit: bool = False):
+    buckets = _bucket(_all_sql_files(schema_root))
+    
+    drop_path = _require_one(buckets, "00", "drop", schema_root)
+    create_path = _require_one(buckets, "10", "schema", schema_root)
+    seed_paths = _seed_files(buckets)
+
+    print("rebuild:")
+    try:
+        print("  drop:")
+        _execute_step(conn, drop_path)
+        
+        print("  create:")
+        _execute_step(conn, create_path)
+        
+        if seed_paths:
+            print("  seed:")
+            for path in seed_paths:
+                _execute_step(conn, path)
+                
+        if not commit:
+            print("  (dry-run: rolled back)")
+            conn.rollback()
+        else:
+            conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise e

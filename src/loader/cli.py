@@ -1,20 +1,6 @@
 """
 cli.py
-Command-line entry point. Two families of subcommand:
-
-    load <input.json> [more.json ...] [--commit]
-                                            load per-client JSON; several files
-                                            run in ONE transaction, in order
-    db {drop|create|seed|rebuild}           manage the schema
-
-`load` is the default -- if the first argument isn't `db` or `load`,
-it's treated as the input path.
-
-Exit codes:
-    0  clean preview, or successful commit
-    1  preflight errors
-    2  input file invalid, config error, or log-file error
-    3  DB error (connect, transaction, or any unexpected failure)
+Command-line entry point.
 """
 
 import argparse
@@ -83,6 +69,8 @@ def _build_parser() -> argparse.ArgumentParser:
 
     db = sub.add_parser("db", help="schema management")
     db.add_argument("action", choices=["drop", "create", "seed", "rebuild"])
+    db.add_argument("--commit", action="store_true",
+                    help="apply the changes instead of rolling back (dry-run)")
     db.add_argument("--data-root", default=None)
     db.add_argument("--schema-root", default=None)
     db.add_argument("--profile", default=None)
@@ -103,14 +91,16 @@ def _run_db(profile, args) -> int:
 
     try:
         if args.action == "drop":
-            schema_mod.drop(conn, profile.schema_root)
+            schema_mod.drop(conn, profile.schema_root, commit=args.commit)
         elif args.action == "create":
-            schema_mod.create(conn, profile.schema_root)
+            schema_mod.create(conn, profile.schema_root, commit=args.commit)
         elif args.action == "seed":
-            schema_mod.seed(conn, profile.schema_root)
+            schema_mod.seed(conn, profile.schema_root, commit=args.commit)
         elif args.action == "rebuild":
-            schema_mod.rebuild(conn, profile.schema_root)
-        print(f"db {args.action}: ok")
+            schema_mod.rebuild(conn, profile.schema_root, commit=args.commit)
+            
+        mode = "committed" if args.commit else "dry-run (rolled back)"
+        print(f"db {args.action}: ok ({mode})")
         return 0
     except ConfigError as e:
         print(f"db {args.action}: config error: {e}", file=sys.stderr)

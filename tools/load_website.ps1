@@ -3,35 +3,16 @@
     Loads the JSON for every client folder under a data root.
 
 .DESCRIPTION
-    For each client folder under the specified data root (default: data/website), 
-    loads every *.json file (in filename order) in one transaction.
-
-.PARAMETER Commit
-    Apply the transaction. Without this, the loader runs in preview mode.
-
-.PARAMETER Client
-    Optional. Load only this client folder. If omitted, loads all clients.
-
-.PARAMETER Profile
-    Optional. The loader profile to use. Defaults to "website".
-
-.PARAMETER DataRoot
-    Optional. The folder to look for client JSONs. Defaults to "data/website".
+    This script uses $args parsing so you can pass double-dash arguments
+    like --commit, --client, --profile, and --data-root.
 
 .EXAMPLE
-    .\tools\load_website.ps1 -Commit
-    .\tools\load_website.ps1 -Profile website_demo -DataRoot "data/website_demo" -Commit
+    .\tools\load_website.ps1 --commit
+    .\tools\load_website.ps1 --profile website_demo --data-root "data/website_demo" --commit
 #>
 
-[CmdletBinding()]
-param(
-    [string]$Client = "",
-    [string]$Profile = "website",
-    [string]$DataRoot = "data\website",
-    [switch]$Commit
-)
-
 $ErrorActionPreference = 'Stop'
+
 if ($PSScriptRoot) {
     $RepoRoot = Split-Path -Parent $PSScriptRoot
 } else {
@@ -39,11 +20,58 @@ if ($PSScriptRoot) {
 }
 Set-Location $RepoRoot
 
+# Defaults
+$Client = ""
+$Profile = "website"
+$DataRoot = "data\website"
+$Commit = $false
+
+# Manual argument parsing for double-dashes
+for ($i = 0; $i -lt $args.Length; $i++) {
+    switch ($args[$i]) {
+        "--commit" {
+            $Commit = $true
+        }
+        "--client" {
+            if ($i + 1 -lt $args.Length) {
+                $Client = $args[$i + 1]
+                $i++
+            }
+        }
+        "--profile" {
+            if ($i + 1 -lt $args.Length) {
+                $Profile = $args[$i + 1]
+                $i++
+            }
+        }
+        "--data-root" {
+            if ($i + 1 -lt $args.Length) {
+                $DataRoot = $args[$i + 1]
+                $i++
+            }
+        }
+        default {
+            Write-Host "Unknown argument: $($args[$i])" -ForegroundColor Red
+            exit 1
+        }
+    }
+}
+
+# Make the DataRoot path absolute relative to the Repo Root
+if (-not [System.IO.Path]::IsPathRooted($DataRoot)) {
+    $DataRoot = Join-Path $RepoRoot $DataRoot
+}
+
 Write-Host ""
 Write-Host "=== LeadWise AI: load_website.ps1 (JSON only) ===" -ForegroundColor Cyan
 Write-Host "Repo root: $RepoRoot"
 Write-Host "Profile:   $Profile"
 Write-Host "Data root: $DataRoot"
+
+if (-not (Test-Path $DataRoot)) {
+    Write-Host "ERROR: Data root does not exist: $DataRoot" -ForegroundColor Red
+    exit 1
+}
 
 # Find client folders
 if ($Client) {
@@ -82,7 +110,7 @@ foreach ($d in $clientDirs) {
     if ($Commit) {
         loader load @inputs --profile $Profile --commit
     } else {
-        Write-Host "(preview only - pass -Commit to apply)" -ForegroundColor DarkGray
+        Write-Host "(preview only - pass --commit to apply)" -ForegroundColor DarkGray
         loader load @inputs --profile $Profile
     }
 

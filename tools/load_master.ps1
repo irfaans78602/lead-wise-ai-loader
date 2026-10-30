@@ -3,36 +3,45 @@
     Loads the JSON for every client folder under data/master/.
 
 .DESCRIPTION
-    Does NOT rebuild the schema. Use `loader db rebuild --profile master`
-    separately if you need to reset the schema.
-
-    For each client folder under data/master/, loads every *.json file
-    (in filename order) in one transaction.
-
-.PARAMETER Commit
-    Apply the transaction. Without this, the loader runs in preview mode.
-
-.PARAMETER Client
-    Optional. Load only this client folder. If omitted, loads all clients.
+    This script uses $args parsing so you can pass double-dash arguments
+    like --commit and --client.
 
 .EXAMPLE
-    .\tools\load_master.ps1 -Commit
-    .\tools\load_master.ps1 -Client leadwise-ai -Commit
+    .\tools\load_master.ps1 --commit
+    .\tools\load_master.ps1 --client leadwise-ai --commit
 #>
 
-[CmdletBinding()]
-param(
-    [string]$Client = "",
-    [switch]$Commit
-)
-
 $ErrorActionPreference = 'Stop'
+
 if ($PSScriptRoot) {
     $RepoRoot = Split-Path -Parent $PSScriptRoot
 } else {
     $RepoRoot = (Get-Location).Path
 }
 Set-Location $RepoRoot
+
+# Defaults
+$Client = ""
+$Commit = $false
+
+# Manual argument parsing for double-dashes
+for ($i = 0; $i -lt $args.Length; $i++) {
+    switch ($args[$i]) {
+        "--commit" {
+            $Commit = $true
+        }
+        "--client" {
+            if ($i + 1 -lt $args.Length) {
+                $Client = $args[$i + 1]
+                $i++
+            }
+        }
+        default {
+            Write-Host "Unknown argument: $($args[$i])" -ForegroundColor Red
+            exit 1
+        }
+    }
+}
 
 Write-Host ""
 Write-Host "=== LeadWise AI: load_master.ps1 (JSON only) ===" -ForegroundColor Cyan
@@ -73,7 +82,7 @@ foreach ($d in $clientDirs) {
     if ($Commit) {
         loader load @inputs --profile master --commit
     } else {
-        Write-Host "(preview only - pass -Commit to apply)" -ForegroundColor DarkGray
+        Write-Host "(preview only - pass --commit to apply)" -ForegroundColor DarkGray
         loader load @inputs --profile master
     }
 

@@ -3,38 +3,16 @@
     Loads the JSON for every client folder under a data root into the demo database.
 
 .DESCRIPTION
-    For each client folder under the specified data root (default: data/website), 
-    loads every *.json file (in filename order) in one transaction.
-    
-    This script defaults to the "website_demo" profile, allowing you to push
-    the shared website data into the demo database.
-
-.PARAMETER Commit
-    Apply the transaction. Without this, the loader runs in preview mode.
-
-.PARAMETER Client
-    Optional. Load only this client folder. If omitted, loads all clients.
-
-.PARAMETER Profile
-    Optional. The loader profile to use. Defaults to "website_demo".
-
-.PARAMETER DataRoot
-    Optional. The folder to look for client JSONs. Defaults to "data\website".
+    This script uses $args parsing so you can pass double-dash arguments
+    like --commit, --client, --profile, and --data-root.
 
 .EXAMPLE
-    .\tools\load_website_demo.ps1 -Commit
-    .\tools\load_website_demo.ps1 -Client leadwise-ai -Commit
+    .\tools\load_demo.ps1 --commit
+    .\tools\load_demo.ps1 --client leadwise-ai --commit
 #>
 
-[CmdletBinding()]
-param(
-    [string]$Client = "",
-    [string]$Profile = "website_demo",
-    [string]$DataRoot = "data\website",
-    [switch]$Commit
-)
-
 $ErrorActionPreference = 'Stop'
+
 if ($PSScriptRoot) {
     $RepoRoot = Split-Path -Parent $PSScriptRoot
 } else {
@@ -42,11 +20,58 @@ if ($PSScriptRoot) {
 }
 Set-Location $RepoRoot
 
+# Defaults
+$Client = ""
+$Profile = "website_demo"
+$DataRoot = "data\website"
+$Commit = $false
+
+# Manual argument parsing for double-dashes
+for ($i = 0; $i -lt $args.Length; $i++) {
+    switch ($args[$i]) {
+        "--commit" {
+            $Commit = $true
+        }
+        "--client" {
+            if ($i + 1 -lt $args.Length) {
+                $Client = $args[$i + 1]
+                $i++
+            }
+        }
+        "--profile" {
+            if ($i + 1 -lt $args.Length) {
+                $Profile = $args[$i + 1]
+                $i++
+            }
+        }
+        "--data-root" {
+            if ($i + 1 -lt $args.Length) {
+                $DataRoot = $args[$i + 1]
+                $i++
+            }
+        }
+        default {
+            Write-Host "Unknown argument: $($args[$i])" -ForegroundColor Red
+            exit 1
+        }
+    }
+}
+
+# Make the DataRoot path absolute relative to the Repo Root
+if (-not [System.IO.Path]::IsPathRooted($DataRoot)) {
+    $DataRoot = Join-Path $RepoRoot $DataRoot
+}
+
 Write-Host ""
 Write-Host "=== LeadWise AI: load_website_demo.ps1 (JSON only) ===" -ForegroundColor Cyan
 Write-Host "Repo root: $RepoRoot"
 Write-Host "Profile:   $Profile"
 Write-Host "Data root: $DataRoot"
+
+if (-not (Test-Path $DataRoot)) {
+    Write-Host "ERROR: Data root does not exist: $DataRoot" -ForegroundColor Red
+    exit 1
+}
 
 # Find client folders
 if ($Client) {
@@ -72,8 +97,6 @@ foreach ($d in $clientDirs) {
     }
 
     # Build the list of relative paths (Client/file.json)
-    # Note: We pass the relative path (e.g., "leadwise-ai/10-client.json") 
-    # because the loader prepends the DATA_ROOT from the .env file.
     $inputs = @()
     foreach ($f in $jsonFiles) {
         $inputs += (Join-Path $d.Name $f.Name)
@@ -85,7 +108,7 @@ foreach ($d in $clientDirs) {
     if ($Commit) {
         loader load @inputs --profile $Profile --commit
     } else {
-        Write-Host "(preview only - pass -Commit to apply)" -ForegroundColor DarkGray
+        Write-Host "(preview only - pass --commit to apply)" -ForegroundColor DarkGray
         loader load @inputs --profile $Profile
     }
 

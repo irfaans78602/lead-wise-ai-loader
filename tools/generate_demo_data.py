@@ -89,6 +89,7 @@ def generate_data():
         raise ValueError(f"Invalid date format. Use YYYY-MM-DD. Error: {e}")
 
     print(f"  Date Range:      {start_dt.strftime('%Y-%m-%d')} to {end_dt.strftime('%Y-%m-%d %H:%M')}")
+    print(f"  Random Seed:     42")
 
     print("\nConnecting to database...")
     
@@ -167,17 +168,29 @@ def generate_data():
         all_question_orders = [f['question_order'] for f in faqs]
         abandon_points = all_question_orders[1:]
 
-        # Name Pools
-        en_names = [("James", "Smith"), ("Mary", "Johnson"), ("John", "Williams"), ("Patricia", "Brown"), ("Robert", "Jones"), ("Jennifer", "Garcia")]
-        afr_names = [("Pieter", "van der Merwe"), ("Annelie", "Botha"), ("Johan", "Pretorius"), ("Elsa", "Coetzee")]
-        xhosa_names = [("Sipho", "Ndlovu"), ("Thabo", "Mokoena"), ("Lerato", "Dlamini"), ("Nomvula", "Nkosi"), ("Sibusiso", "Khumalo")]
-        zulu_names = [("Mandla", "Zulu"), ("Nandi", "Mahlangu"), ("Bongani", "Nkomo")]
-        sotho_names = [("Teboho", "Mokoena"), ("Palesa", "Mofokeng"), ("Kagiso", "Radebe")]
+        # Massive name pools for realistic diversity
+        first_names = [
+            "James", "Mary", "John", "Patricia", "Robert", "Jennifer", "Michael", "Linda", "William", "Elizabeth",
+            "David", "Barbara", "Richard", "Susan", "Joseph", "Jessica", "Thomas", "Sarah", "Charles", "Karen",
+            "Christopher", "Nancy", "Daniel", "Lisa", "Matthew", "Betty", "Anthony", "Margaret", "Mark", "Sandra",
+            "Pieter", "Annelie", "Johan", "Elsa", "Daan", "Lize", "Francois", "Mariska", "Willem", "Riana",
+            "Sipho", "Thabo", "Lerato", "Nomvula", "Sibusiso", "Nandi", "Mandla", "Palesa", "Bongani", "Zanele",
+            "Teboho", "Kagiso", "Mpho", "Tshepo", "Nomsa", "Ayanda", "Lwazi", "Nhlanhla", "Khanyisile", "Sifiso"
+        ]
+        
+        last_names = [
+            "Smith", "Johnson", "Williams", "Brown", "Jones", "Garcia", "Miller", "Davis", "Rodriguez", "Martinez",
+            "Hernandez", "Lopez", "Gonzalez", "Wilson", "Anderson", "Thomas", "Taylor", "Moore", "Jackson", "Martin",
+            "van der Merwe", "Botha", "Pretorius", "Coetzee", "du Plessis", "Nel", "Fourie", "Venter", "Kruger", "Steyn",
+            "Ndlovu", "Mokoena", "Dlamini", "Nkosi", "Khumalo", "Mahlangu", "Zulu", "Nkomo", "Radebe", "Mofokeng",
+            "Mabaso", "Sithole", "Msibi", "Ntuli", "Mthembu", "Ngcobo", "Zulu", "Maseko", "Shabalala", "Cele"
+        ]
 
         business_names = [
             "Acme Corp", "Global Tech", "Cape Coffee Co", "Joburg Plumbing", "Sandton Legal",
             "Durban Design", "Pretoria Paints", "Soweto Eats", "Cape Town Cabs", "Kruger Safaris",
-            "Blue Sky Media", "Nova Consulting", "Elite Auto", "Green Leaf Health", "Sunshine Retail"
+            "Blue Sky Media", "Nova Consulting", "Elite Auto", "Green Leaf Health", "Sunshine Retail",
+            "Apex Logistics", "Vanguard Finance", "Pinnacle IT", "Summit Marketing", "Horizon Freight"
         ]
 
         # Email Domains
@@ -187,11 +200,7 @@ def generate_data():
         sa_mobile_prefixes = ["082", "083", "084", "060", "061", "062", "063", "064", "065", "066", "067", "068", "071", "072", "073", "074", "076", "078", "079", "081"]
 
         def get_random_name():
-            roll = random.randint(1, 100)
-            if roll <= 30: return random.choice(en_names)
-            elif roll <= 40: return random.choice(afr_names)
-            elif roll <= 65: return random.choice(xhosa_names)
-            else: return random.choice(zulu_names + sotho_names)
+            return random.choice(first_names), random.choice(last_names)
 
         def get_random_phone():
             prefix = random.choice(sa_mobile_prefixes)
@@ -225,7 +234,6 @@ def generate_data():
             target_ad = target_ads[i]
             target_ad_id = target_ad['ad_id']
             
-            # Ensure customer_id is unique for the first 2000
             customer_id = i + 1 if i < 2000 else random.randint(1, 2000)
 
             conv_type = conversation_types[i]
@@ -255,14 +263,16 @@ def generate_data():
                     weights=[10, 60, 25, 5], k=1
                 )[0]
                 
-                q_score_val = random.randint(60, 100)
-                q_id = None
-                for qs in q_scores:
-                    if q_score_val >= qs['score'].lower and q_score_val < qs['score'].upper:
-                        q_id = qs['qualification_score_id']
-                        break
-                if not q_id:
-                    q_id = random.choice(q_scores)['qualification_score_id']
+                # --- FIX: Pick a random qualification band, then a score within its range ---
+                chosen_qs = random.choice(q_scores)
+                min_score = chosen_qs['score'].lower
+                max_score = chosen_qs['score'].upper - 1
+                
+                if max_score >= 211:
+                    max_score = 210
+                    
+                q_score_val = random.randint(min_score, max_score)
+                q_id = chosen_qs['qualification_score_id']
                     
             else:
                 status = random.choices(
@@ -273,16 +283,13 @@ def generate_data():
                 q_id = None 
 
             if i < 2000:
-                # Insert the customer
                 customers_data.append((
                     customer_id, target_ad_id, None, 'chat',
                     f"user_{customer_id}", status, q_score_val, q_id, created_at
                 ))
 
-                # 1. Always start with Pending
                 statuses_data.append((customer_id, 'Pending', 'First contact', created_at))
                 
-                # 2. If they completed, they move through 1-3 random statuses before settling on the final one
                 if conv_type == 'completed':
                     intermediate_pool = ['Contacted', 'Callback-Requested', 'No-Response', 'Bad-Contact', 'Duplicate', 'Qualified']
                     num_moves = random.randint(1, 3)

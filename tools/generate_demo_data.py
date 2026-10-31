@@ -258,12 +258,12 @@ def generate_data():
             phone_num = get_random_phone()
 
             if conv_type == 'completed':
-                status = random.choices(
-                    ['Pending', 'Converted', 'Contacted', 'Withdrawn'],
-                    weights=[10, 60, 25, 5], k=1
-                )[0]
+                # 60% Converted, rest randomly from the remaining valid statuses
+                if random.random() < 0.60:
+                    status = 'Converted'
+                else:
+                    status = random.choice(['Contacted', 'Qualified', 'Not-Qualified', 'No-Response', 'Bad-Contact', 'Duplicate', 'Callback-Requested', 'Withdrawn'])
                 
-                # --- FIX: Pick a random qualification band, then a score within its range ---
                 chosen_qs = random.choice(q_scores)
                 min_score = chosen_qs['score'].lower
                 max_score = chosen_qs['score'].upper - 1

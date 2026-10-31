@@ -357,6 +357,7 @@ CREATE TABLE client_services (
                            'website_setup',
                            'website_extra_pages',
                            'lead_qualification',
+                           'lead_monthly_fee',
                            'seo',
                            'ads_mgmt',
                            'ask_ai_public',
@@ -394,7 +395,7 @@ CREATE TABLE client_services (
         OR
         (service_code = 'lead_qualification'   AND fee_basis = 'per_lead')
         OR
-        (service_code IN ('seo', 'ads_mgmt', 'ask_ai_public', 'ask_ai_internal')
+        (service_code IN ('lead_monthly_fee', 'seo', 'ads_mgmt', 'ask_ai_public', 'ask_ai_internal')
                                                AND fee_basis = 'monthly')
     ),
 

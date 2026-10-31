@@ -178,6 +178,7 @@ SERVICE_FEE_BASIS = {
     "website_setup": "one_time",
     "website_extra_pages": "per_page",
     "lead_qualification": "per_lead",
+    "lead_monthly_fee": "monthly",
     "seo": "monthly",
     "ads_mgmt": "monthly",
     "ask_ai_public": "monthly",

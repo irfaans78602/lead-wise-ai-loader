@@ -59,24 +59,20 @@ def generate_data():
     cur = conn.cursor()
 
     try:
-        print("Fetching ads for the target client...")
         TARGET_CLIENT_ID = '35d69a44-9649-5556-81a0-251ab6dc537b'
 
-        # 1. Fetch Client Config (For data-driven columns)
+        print("\n[1/8] Reading Client Config...")
         cur.execute("""
             SELECT display_first_name_question_id, display_last_name_question_id, display_contact_question_id 
             FROM clients WHERE client_id = %s
         """, (TARGET_CLIENT_ID,))
         cfg = cur.fetchone()
-        
-        # NEW COLUMN NAMES
         first_qid = cfg['display_first_name_question_id'] if cfg else None
         last_qid = cfg['display_last_name_question_id'] if cfg else None
         email_qid = cfg['display_contact_question_id'] if cfg else None
-        
-        print(f"  Client Config: First Name Q_ID={first_qid}, Last Name Q_ID={last_qid}, Email Q_ID={email_qid}")
+        print(f"      -> First Name Q_ID: {first_qid}, Last Name Q_ID: {last_qid}, Email Q_ID: {email_qid}")
 
-        # 2. Fetch Ads
+        print("\n[2/8] Reading Ads...")
         cur.execute("""
             SELECT a.ad_id, a.ad_name, a.reuse_ad_id, l.code AS language_code
             FROM ads a
@@ -86,9 +82,6 @@ def generate_data():
         """, (TARGET_CLIENT_ID,))
         all_ads = cur.fetchall()
 
-        if not all_ads:
-            raise ValueError(f"No ads found for client {TARGET_CLIENT_ID}.")
-
         root_ads = [a for a in all_ads if a['reuse_ad_id'] is None]
         leaves   = [a for a in all_ads if a['reuse_ad_id'] is not None]
 
@@ -96,7 +89,7 @@ def generate_data():
             raise ValueError(f"No root ad found for client {TARGET_CLIENT_ID}.")
 
         root_ad = root_ads[0]
-        print(f"  Root ad:  {root_ad['ad_name']} ({root_ad['ad_id']})")
+        print(f"      -> Root Ad: {root_ad['ad_name']} ({root_ad['ad_id']})")
 
         leaves_by_lang = {}
         for leaf in leaves:
@@ -106,8 +99,9 @@ def generate_data():
 
         en_leaf = leaves_by_lang.get('en', root_ad)
         other_leaf_langs = sorted(lang for lang in leaves_by_lang if lang != 'en')
+        print(f"      -> Found {len(leaves)} leaf ads across {len(leaves_by_lang)} languages.")
 
-        # 3. Fetch FAQs
+        print("\n[3/8] Reading FAQs...")
         cur.execute("""
             SELECT faq_id, question_id, question_order, question_type
             FROM faqs
@@ -115,16 +109,16 @@ def generate_data():
             ORDER BY question_order
         """, (root_ad['ad_id'],))
         faqs = cur.fetchall()
-        print(f"\n  Root FAQs:              {len(faqs)}")
+        print(f"      -> Found {len(faqs)} questions.")
 
-        # 4. Fetch qualification scores
+        print("\n[4/8] Reading Qualification Scores...")
         cur.execute("""
             SELECT qualification_score_id, level_code, score
             FROM qualification_score
             WHERE ad_id = %s
         """, (root_ad['ad_id'],))
         q_scores = cur.fetchall()
-        print(f"  Root qualification bands: {len(q_scores)}")
+        print(f"      -> Found {len(q_scores)} score bands: {', '.join([q['level_code'] for q in q_scores])}")
 
         if not faqs or not q_scores:
             raise ValueError("Missing FAQs or Qualification Scores on the root ad.")
@@ -146,10 +140,11 @@ def generate_data():
                 else:
                     target_ads.append(en_leaf)
 
+        # 75% completed, 25% abandoned
         conversation_types = ['abandoned'] * 750 + ['completed'] * 2250
         random.shuffle(conversation_types)
 
-        print("\nGenerating data (this may take a few seconds)...")
+        print("\n[5/8] Generating in-memory data (3000 records)...")
 
         customers_data = []
         conversations_data = []
@@ -159,35 +154,55 @@ def generate_data():
 
         for i in range(3000):
             if i > 0 and i % 1000 == 0:
-                print(f"  ... generated {i} / 3000 conversations")
+                print(f"      ... generated {i} / 3000")
 
             target_ad = target_ads[i]
             target_ad_id = target_ad['ad_id']
             customer_id = i + 1 if i < 2000 else random.randint(1, 2000)
 
-            if i < 2000:
-                created_at = random_date(start_dt, end_dt)
+            conv_type = conversation_types[i]
+            conv_created_at = random_date(start_dt, end_dt)
+            created_at = conv_created_at - timedelta(minutes=random.randint(1, 60))
+
+            if conv_type == 'completed':
+                state = 'completed'
+                current_order = max(all_question_orders) + 1
+                completed_at = conv_created_at + timedelta(minutes=random.randint(2, 15))
+                
+                # Pending (System), Converted (60%), Contacted (25%), Withdrawn (5%)
                 status = random.choices(
-                    ['Pending', 'Contacted', 'Qualified', 'Converted', 'Withdrawn'],
-                    weights=[10, 30, 40, 15, 5], k=1
+                    ['Pending', 'Converted', 'Contacted', 'Withdrawn'],
+                    weights=[10, 60, 25, 5],
+                    k=1
                 )[0]
                 
-                if status in ('Qualified', 'Converted'):
-                    score = random.randint(60, 100)
-                else:
-                    score = random.randint(10, 50)
-                    
+                q_score_val = random.randint(60, 100)
                 q_id = None
                 for qs in q_scores:
-                    if score >= qs['score'].lower and score < qs['score'].upper:
+                    if q_score_val >= qs['score'].lower and q_score_val < qs['score'].upper:
                         q_id = qs['qualification_score_id']
                         break
                 if not q_id:
                     q_id = random.choice(q_scores)['qualification_score_id']
+                    
+            else:
+                state = 'abandoned'
+                current_order = random.choice(abandon_points)
+                completed_at = None
+                
+                # Abandoned leads cannot be Converted or Pending.
+                status = random.choices(
+                    ['Not-Qualified', 'No-Response', 'Bad-Contact'],
+                    weights=[50, 30, 20],
+                    k=1
+                )[0]
+                q_score_val = random.randint(0, 50)
+                q_id = None 
 
+            if i < 2000:
                 customers_data.append((
                     customer_id, target_ad_id, None, 'chat',
-                    f"user_{customer_id}", status, score, q_id, created_at
+                    f"user_{customer_id}", status, q_score_val, q_id, created_at
                 ))
 
                 note = random.choice([
@@ -197,20 +212,6 @@ def generate_data():
                     "Follow-up required regarding implementation timeline."
                 ])
                 statuses_data.append((customer_id, status, note, created_at))
-
-            conv_type = conversation_types[i]
-            conv_created_at = random_date(start_dt, end_dt)
-            if i < 2000:
-                conv_created_at = created_at + timedelta(minutes=random.randint(1, 60))
-
-            if conv_type == 'completed':
-                state = 'completed'
-                current_order = max(all_question_orders) + 1
-                completed_at = conv_created_at + timedelta(minutes=random.randint(2, 15))
-            else:
-                state = 'abandoned'
-                current_order = random.choice(abandon_points)
-                completed_at = None
 
             conversations_data.append((
                 i + 1, customer_id, current_order, state, completed_at, conv_created_at
@@ -225,7 +226,6 @@ def generate_data():
                     ans_text = None
                     ans_vals = None
                     
-                    # Use the IDs from the database to correctly map answers
                     is_first = (first_qid and faq['question_id'] == first_qid) or (not first_qid and q_type == 'first_name')
                     is_last = (last_qid and faq['question_id'] == last_qid) or (not last_qid and q_type == 'last_name')
                     is_email = (email_qid and faq['question_id'] == email_qid) or (not email_qid and q_type == 'email_address')
@@ -252,15 +252,6 @@ def generate_data():
                     ))
 
             if conv_type == 'completed':
-                q_score_val = random.randint(60, 100)
-                q_id = None
-                for qs in q_scores:
-                    if q_score_val >= qs['score'].lower and q_score_val < qs['score'].upper:
-                        q_id = qs['qualification_score_id']
-                        break
-                if not q_id:
-                    q_id = random.choice(q_scores)['qualification_score_id']
-
                 qualifications_data.append((
                     i + 1, customer_id, root_ad['ad_id'],
                     q_score_val,
@@ -268,54 +259,48 @@ def generate_data():
                     completed_at, completed_at
                 ))
 
-        print("\nGeneration complete:")
-        print(f"  Customers:       {len(customers_data)}")
-        print(f"  Conversations:   {len(conversations_data)}")
-        print(f"  Answers:         {len(answers_data)}")
-        print(f"  Qualifications:  {len(qualifications_data)}")
-        print(f"  Statuses:        {len(statuses_data)}")
+        print(f"      -> Generation complete.")
 
-        print("\nInserting data...")
-
+        print("\n[6/8] Inserting Customers and Conversations...")
         execute_values(cur, """
             INSERT INTO customers (
                 customer_id, ad_id, demo_session_id, channel, channel_user_id,
                 status, qualification_score, qualification_id, created_at
-            )
-            OVERRIDING SYSTEM VALUE
-            VALUES %s ON CONFLICT DO NOTHING
+            ) OVERRIDING SYSTEM VALUE VALUES %s ON CONFLICT DO NOTHING
         """, customers_data)
+        print(f"      -> Inserted {len(customers_data)} customers.")
 
         execute_values(cur, """
             INSERT INTO conversations (
                 conversation_id, customer_id, current_order, state,
                 completed_at, created_at
-            )
-            OVERRIDING SYSTEM VALUE
-            VALUES %s ON CONFLICT DO NOTHING
+            ) OVERRIDING SYSTEM VALUE VALUES %s ON CONFLICT DO NOTHING
         """, conversations_data)
+        print(f"      -> Inserted {len(conversations_data)} conversations.")
 
+        print("\n[7/8] Inserting Answers and Qualifications...")
         execute_values(cur, """
             INSERT INTO answers (
                 conversation_id, faq_id, answer_text, answer_values, created_at
-            )
-            VALUES %s ON CONFLICT DO NOTHING
+            ) VALUES %s ON CONFLICT DO NOTHING
         """, answers_data)
+        print(f"      -> Inserted {len(answers_data)} answers.")
 
         execute_values(cur, """
             INSERT INTO qualifications (
                 conversation_id, customer_id, ad_id, qualification_score,
                 qualification_id, qualified_at, created_at
-            )
-            VALUES %s ON CONFLICT DO NOTHING
+            ) VALUES %s ON CONFLICT DO NOTHING
         """, qualifications_data)
+        print(f"      -> Inserted {len(qualifications_data)} qualifications.")
 
+        print("\n[8/8] Inserting Customer Statuses...")
         execute_values(cur, """
             INSERT INTO customer_statuses (
                 customer_id, status, note, changed_at
-            )
-            VALUES %s ON CONFLICT DO NOTHING
+            ) VALUES %s ON CONFLICT DO NOTHING
         """, statuses_data)
+        print(f"      -> Inserted {len(statuses_data)} status history records.")
 
         print("\nResetting sequences...")
         cur.execute("SELECT setval(pg_get_serial_sequence('customers', 'customer_id'), coalesce(max(customer_id), 1)) FROM customers;")

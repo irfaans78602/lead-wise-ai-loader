@@ -6,11 +6,27 @@ If commit=False (default), the operations are executed in a transaction
 and then rolled back. Pass commit=True to apply the changes.
 """
 
+import re
 import sys
 import time
 from pathlib import Path
 
 from loader.errors import ConfigError
+
+
+# The schema SQL files carry their own top-level BEGIN;/COMMIT; so they can
+# be run standalone in a SQL client. The loader manages the transaction
+# itself (dry-run rolls back), so these are stripped before execution --
+# otherwise the file's own COMMIT; would commit the schema changes even on
+# a dry-run (e.g. `loader db drop` without --commit would really drop).
+_TXN_STMT_RE = re.compile(
+    r"^\s*(?:BEGIN|COMMIT|ROLLBACK|START\s+TRANSACTION)\s*;\s*$",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+
+def _strip_transaction_statements(sql: str) -> str:
+    return _TXN_STMT_RE.sub("", sql)
 
 
 def _all_sql_files(schema_root: str) -> list[Path]:
@@ -62,7 +78,8 @@ def _run_sql_file(conn, path: Path):
     print(f"  -> {path.name} ({size_kb} KB) ... ", end="", flush=True)
     t0 = time.monotonic()
     sql = path.read_text(encoding="utf-8")
-    
+    sql = _strip_transaction_statements(sql)
+
     try:
         with conn.cursor() as cur:
             cur.execute(sql)
@@ -120,7 +137,7 @@ def seed(conn, schema_root: str, commit: bool = False):
 
 def rebuild(conn, schema_root: str, commit: bool = False):
     buckets = _bucket(_all_sql_files(schema_root))
-    
+
     drop_path = _require_one(buckets, "00", "drop", schema_root)
     create_path = _require_one(buckets, "10", "schema", schema_root)
     seed_paths = _seed_files(buckets)
@@ -129,15 +146,15 @@ def rebuild(conn, schema_root: str, commit: bool = False):
     try:
         print("  drop:")
         _execute_step(conn, drop_path)
-        
+
         print("  create:")
         _execute_step(conn, create_path)
-        
+
         if seed_paths:
             print("  seed:")
             for path in seed_paths:
                 _execute_step(conn, path)
-                
+
         if not commit:
             print("  (dry-run: rolled back)")
             conn.rollback()

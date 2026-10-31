@@ -107,6 +107,28 @@ CLIENT_MESSAGES = EntitySpec(
 )
 
 
+CLIENT_SERVICES = EntitySpec(
+    name="client_services",
+    table="client_services",
+    pk_col="client_service_id",
+    pk_kind="client_service",
+    natural_key=("client_id", "service_code", "locale_code"),
+    versioned=True,
+    version_key=("start_date",),
+    columns={
+        "service_code": "service_code",
+        "locale_code": "locale_code",
+        "fee_cents": "fee_cents",
+        "fee_basis": "fee_basis",
+        "quantity": "quantity",
+        "currency_code": "currency_code",
+        "notes": "notes",
+        "start_date": "start_date",
+        "end_date": "end_date",
+    },
+)
+
+
 AD_CONFIRMATIONS = EntitySpec(
     name="ad_confirmations",
     table="ad_confirmations",
@@ -237,6 +259,7 @@ ALL = {
         CLIENT_USERS,
         ADS,
         CLIENT_MESSAGES,
+        CLIENT_SERVICES,
         AD_CONFIRMATIONS,
         AD_REOPEN_PROMPTS,
         FAQS,

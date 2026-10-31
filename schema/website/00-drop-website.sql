@@ -22,8 +22,10 @@ DROP VIEW IF EXISTS active_ad_reopen_prompts       CASCADE;
 DROP VIEW IF EXISTS active_ad_confirmations        CASCADE;
 DROP VIEW IF EXISTS active_ads                     CASCADE;
 DROP VIEW IF EXISTS active_client_messages         CASCADE;
+DROP VIEW IF EXISTS active_client_services         CASCADE;
 DROP VIEW IF EXISTS active_clients                 CASCADE;
 DROP VIEW IF EXISTS active_agencies                CASCADE;
+DROP VIEW IF EXISTS active_pricing_pilot           CASCADE;
 DROP VIEW IF EXISTS active_pricing_discounts       CASCADE;
 DROP VIEW IF EXISTS active_pricing_addons          CASCADE;
 DROP VIEW IF EXISTS active_pricing_website         CASCADE;
@@ -52,7 +54,8 @@ DROP TRIGGER IF EXISTS agency_users_updated_at       ON agency_users       CASCA
 DROP TRIGGER IF EXISTS settings_updated_at           ON settings           CASCADE;
 DROP TRIGGER IF EXISTS invoice_payments_updated_at   ON invoice_payments   CASCADE;
 
-DROP TRIGGER IF EXISTS customer_statuses_sync_current ON customer_statuses CASCADE;
+DROP TRIGGER IF EXISTS customer_statuses_sync_current  ON customer_statuses  CASCADE;
+DROP TRIGGER IF EXISTS client_services_no_wildcard_mix ON client_services    CASCADE;
 
 -- -------------------------------------------------------------
 -- Functions
@@ -61,6 +64,7 @@ DROP FUNCTION IF EXISTS forbid_content_on_leaf_ad()       CASCADE;
 DROP FUNCTION IF EXISTS sync_customer_current_status()     CASCADE;
 DROP FUNCTION IF EXISTS effective_ad_id(TEXT)              CASCADE;
 DROP FUNCTION IF EXISTS set_updated_at()                   CASCADE;
+DROP FUNCTION IF EXISTS forbid_wildcard_locale_mix()       CASCADE;
 
 -- -------------------------------------------------------------
 -- Tables
@@ -85,10 +89,12 @@ DROP TABLE IF EXISTS qualification_levels     CASCADE;
 DROP TABLE IF EXISTS ads                      CASCADE;
 
 DROP TABLE IF EXISTS client_messages          CASCADE;
+DROP TABLE IF EXISTS client_services          CASCADE;
 DROP TABLE IF EXISTS client_users             CASCADE;
 DROP TABLE IF EXISTS agency_users             CASCADE;
 DROP TABLE IF EXISTS pricing_discounts        CASCADE;
 DROP TABLE IF EXISTS pricing_addons           CASCADE;
+DROP TABLE IF EXISTS pricing_pilot            CASCADE;
 DROP TABLE IF EXISTS pricing_website          CASCADE;
 DROP TABLE IF EXISTS pricing_rates            CASCADE;
 DROP TABLE IF EXISTS pricing_segment_tiers    CASCADE;

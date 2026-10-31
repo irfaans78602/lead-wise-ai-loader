@@ -211,6 +211,27 @@ CREATE INDEX pricing_addons_country_idx ON pricing_addons (country_id);
 CREATE INDEX pricing_addons_active_idx  ON pricing_addons (start_date, end_date);
 
 -- =============================================================
+-- 10.1 Pricing Pilot
+-- =============================================================
+CREATE TABLE pricing_pilot (
+    pilot_pricing_id     BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    country_id           SMALLINT NOT NULL REFERENCES countries(country_id) ON DELETE RESTRICT,
+    setup_discount_pct   NUMERIC(5,2) NOT NULL,
+    base_discount_pct    NUMERIC(5,2) NOT NULL,
+    duration_months      SMALLINT NOT NULL,
+    start_date           DATE NOT NULL DEFAULT '1900-01-01',
+    end_date             DATE NOT NULL DEFAULT '9999-12-31',
+    created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (country_id, start_date),
+    CHECK (start_date <= end_date),
+    CHECK (setup_discount_pct >= 0 AND setup_discount_pct <= 100),
+    CHECK (base_discount_pct  >= 0 AND base_discount_pct  <= 100),
+    CHECK (duration_months    >= 1)
+);
+CREATE INDEX pricing_pilot_country_idx ON pricing_pilot (country_id);
+CREATE INDEX pricing_pilot_active_idx  ON pricing_pilot (start_date, end_date);
+
+-- =============================================================
 -- 11. Agencies
 -- =============================================================
 CREATE TABLE agencies (
@@ -307,6 +328,154 @@ CREATE TABLE demo_sessions (
 );
 CREATE INDEX demo_sessions_client_idx  ON demo_sessions (client_id);
 CREATE INDEX demo_sessions_expires_idx ON demo_sessions (expires_at);
+
+-- =============================================================
+-- 12.2 Client Services
+-- One row per billed line item per client. fee_cents is the unit
+-- price; fee_basis determines how quantity is interpreted:
+--
+--   one_time   - charged once (website setup, onboarding)
+--   per_page   - charged once, per page (extra pages)
+--   per_lead   - charged per qualified lead, per billing cycle
+--   monthly    - charged once per billing cycle (subscriptions)
+--
+-- locale_code is '*' for services that apply to all locales
+-- (website setup), or a specific locale for services that vary
+-- by market (per-lead rate, SEO, Ads, Ask AI Assist). A client
+-- cannot have both a wildcard and a specific-locale current
+-- contract for the same (service_code) -- enforced by trigger.
+--
+-- Active rows are those where CURRENT_DATE is between start_date
+-- and end_date. The specific contracted fee lives here; the
+-- published floor and ceiling live in pricing_* tables.
+-- =============================================================
+CREATE TABLE client_services (
+    client_service_id  UUID PRIMARY KEY,
+    client_id          UUID NOT NULL REFERENCES clients(client_id) ON DELETE CASCADE,
+    service_code       TEXT NOT NULL
+                       CHECK (service_code IN (
+                           'website_setup',
+                           'website_extra_pages',
+                           'lead_qualification',
+                           'seo',
+                           'ads_mgmt',
+                           'ask_ai_public',
+                           'ask_ai_internal'
+                       )),
+    locale_code        VARCHAR(5) NOT NULL DEFAULT '*'
+                       CHECK (
+                           locale_code = '*'
+                           OR locale_code IN ('en', 'ar', 'es', 'fr', 'zh')
+                       ),
+    fee_cents          INT NOT NULL
+                       CHECK (fee_cents >= 0),
+    fee_basis          TEXT NOT NULL
+                       CHECK (fee_basis IN (
+                           'one_time',
+                           'per_page',
+                           'per_lead',
+                           'monthly'
+                       )),
+    quantity           INT NOT NULL DEFAULT 1
+                       CHECK (quantity >= 1),
+    currency_code      CHAR(3) NOT NULL
+                       CHECK (currency_code ~ '^[A-Z]{3}$'),
+    start_date         DATE NOT NULL DEFAULT '1900-01-01',
+    end_date           DATE NOT NULL DEFAULT '9999-12-31',
+    notes              TEXT,
+    created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CHECK (start_date <= end_date),
+
+    -- fee_basis must match service_code's inherent shape.
+    CHECK (
+        (service_code = 'website_setup'        AND fee_basis = 'one_time')
+        OR
+        (service_code = 'website_extra_pages'  AND fee_basis = 'per_page')
+        OR
+        (service_code = 'lead_qualification'   AND fee_basis = 'per_lead')
+        OR
+        (service_code IN ('seo', 'ads_mgmt', 'ask_ai_public', 'ask_ai_internal')
+                                               AND fee_basis = 'monthly')
+    ),
+
+    -- website_setup is not locale-scoped; it must always use '*'.
+    -- Everything else may be '*' or a specific locale, and the
+    -- trigger below enforces that they don't mix.
+    CHECK (service_code <> 'website_setup' OR locale_code = '*')
+);
+
+-- Primary lookup path: "what is this client paying for, right now?"
+CREATE INDEX client_services_client_idx
+    ON client_services (client_id, start_date, end_date);
+
+-- "Which clients have SEO?" / "Show me all clients on AI Assist."
+CREATE INDEX client_services_code_idx
+    ON client_services (service_code);
+
+-- Only one current contract per (client, service, locale).
+CREATE UNIQUE INDEX client_services_current_unique
+    ON client_services (client_id, service_code, locale_code)
+    WHERE end_date = '9999-12-31';
+
+-- Billing roll-up: leads + monthly fees for active clients.
+CREATE INDEX client_services_active_billing_idx
+    ON client_services (client_id, fee_basis)
+    WHERE end_date = '9999-12-31'
+      AND fee_basis IN ('per_lead', 'monthly');
+
+-- Audit trail.
+CREATE INDEX client_services_history_idx
+    ON client_services (client_id, service_code, start_date DESC);
+
+-- Locale-keyed reporting: "what does this client pay for AR?"
+CREATE INDEX client_services_locale_idx
+    ON client_services (locale_code)
+    WHERE end_date = '9999-12-31';
+
+-- Enforce "wildcard XOR specific-locale" invariant. A client with
+-- locale_code='*' for lead_qualification cannot also have locale_code='en'.
+-- A client with locale_code='en' cannot later add locale_code='*'.
+-- Either pattern is fine on its own; the mix is rejected.
+CREATE OR REPLACE FUNCTION forbid_wildcard_locale_mix()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.locale_code = '*' THEN
+        IF EXISTS (
+            SELECT 1 FROM client_services
+            WHERE client_id    = NEW.client_id
+              AND service_code = NEW.service_code
+              AND locale_code <> '*'
+              AND end_date     = '9999-12-31'
+              AND client_service_id <> COALESCE(
+                  NEW.client_service_id,
+                  '00000000-0000-0000-0000-000000000000'::uuid
+              )
+        ) THEN
+            RAISE EXCEPTION
+                'client_services: cannot add wildcard locale when specific-locale rows exist for client_id=%, service_code=%',
+                NEW.client_id, NEW.service_code;
+        END IF;
+    ELSE
+        IF EXISTS (
+            SELECT 1 FROM client_services
+            WHERE client_id    = NEW.client_id
+              AND service_code = NEW.service_code
+              AND locale_code  = '*'
+              AND end_date     = '9999-12-31'
+        ) THEN
+            RAISE EXCEPTION
+                'client_services: cannot add specific-locale row when wildcard exists for client_id=%, service_code=%',
+                NEW.client_id, NEW.service_code;
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER client_services_no_wildcard_mix
+    BEFORE INSERT OR UPDATE ON client_services
+    FOR EACH ROW
+    EXECUTE FUNCTION forbid_wildcard_locale_mix();
 
 -- =============================================================
 -- 13. Pricing Discounts
@@ -862,6 +1031,7 @@ CREATE VIEW active_pricing_segment_tiers AS SELECT * FROM pricing_segment_tiers 
 CREATE VIEW active_pricing_rates AS SELECT * FROM pricing_rates WHERE start_date <= CURRENT_DATE AND CURRENT_DATE <= end_date;
 CREATE VIEW active_pricing_website AS SELECT * FROM pricing_website WHERE start_date <= CURRENT_DATE AND CURRENT_DATE <= end_date;
 CREATE VIEW active_pricing_addons AS SELECT * FROM pricing_addons WHERE start_date <= CURRENT_DATE AND CURRENT_DATE <= end_date;
+CREATE VIEW active_pricing_pilot AS SELECT * FROM pricing_pilot WHERE start_date <= CURRENT_DATE AND CURRENT_DATE <= end_date;
 CREATE VIEW active_pricing_discounts AS SELECT * FROM pricing_discounts WHERE start_date <= CURRENT_DATE AND CURRENT_DATE <= end_date;
 CREATE VIEW active_agencies AS SELECT * FROM agencies WHERE start_date <= CURRENT_DATE AND CURRENT_DATE <= end_date;
 CREATE VIEW active_clients AS SELECT * FROM clients WHERE start_date <= CURRENT_DATE AND CURRENT_DATE <= end_date;
@@ -943,5 +1113,14 @@ WITH per_ad AS (
 SELECT client_id, ad_id, status, n, round(100.0 * n / nullif(sum(n) OVER (PARTITION BY client_id, ad_id), 0), 1) AS pct
 FROM per_ad
 ORDER BY client_id, ad_id, n DESC;
+
+-- =============================================================
+-- 40. Active Client Services View
+-- =============================================================
+CREATE VIEW active_client_services AS
+SELECT *
+FROM client_services
+WHERE start_date <= CURRENT_DATE
+  AND CURRENT_DATE <= end_date;
 
 COMMIT;

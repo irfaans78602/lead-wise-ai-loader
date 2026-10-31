@@ -147,6 +147,11 @@ def _plan_client(client: dict, plan: Plan, source: str):
     if pricing:
         _plan_client_pricing(client_id, key, pricing, plan, source)
 
+    services = client.get("services")
+    if services:
+        _plan_client_services(client_id, key, services, plan, source,
+                              default_currency=client.get("currency_code"))
+
 
 def _plan_client_message(client_id, client_key, msg, plan, source):
     spec = entities.CLIENT_MESSAGES
@@ -165,6 +170,78 @@ def _plan_client_message(client_id, client_key, msg, plan, source):
         logical_key=(client_key, "client_messages"),
         source_path=source,
     ))
+
+
+# fee_basis is fixed by service_code (mirrors the CHECK on client_services),
+# so JSON rows may omit it.
+SERVICE_FEE_BASIS = {
+    "website_setup": "one_time",
+    "website_extra_pages": "per_page",
+    "lead_qualification": "per_lead",
+    "seo": "monthly",
+    "ads_mgmt": "monthly",
+    "ask_ai_public": "monthly",
+    "ask_ai_internal": "monthly",
+}
+
+
+def _plan_client_services(client_id, client_key, services, plan, source,
+                          default_currency=None):
+    spec = entities.CLIENT_SERVICES
+    where = f"client_services[{client_key}]"
+
+    for row in services:
+        service_code = require(row, "service_code", where)
+        if service_code not in SERVICE_FEE_BASIS:
+            raise FileError(
+                f"{where}: unknown service_code '{service_code}'; "
+                f"allowed: {', '.join(sorted(SERVICE_FEE_BASIS))}"
+            )
+
+        fee_basis = row.get("fee_basis", SERVICE_FEE_BASIS[service_code])
+        if fee_basis != SERVICE_FEE_BASIS[service_code]:
+            raise FileError(
+                f"{where} {service_code}: fee_basis must be "
+                f"'{SERVICE_FEE_BASIS[service_code]}', got '{fee_basis}'"
+            )
+
+        locale_code = row.get("locale_code", "*")
+        if service_code == "website_setup" and locale_code != "*":
+            raise FileError(
+                f"{where} website_setup: locale_code must be '*'"
+            )
+
+        currency_code = row.get("currency_code") or default_currency
+        if not currency_code:
+            raise FileError(
+                f"{where} {service_code}: missing currency_code "
+                f"(and the client has none to default to)"
+            )
+
+        start_date = row.get("start_date", "1900-01-01")
+        pk = derive("client_service", str(client_id), service_code,
+                    locale_code, start_date)
+
+        plan.add(PlanOp(
+            spec=spec,
+            pk=pk,
+            payload={
+                "client_service_id": pk,
+                "client_id": client_id,
+                "service_code": service_code,
+                "locale_code": locale_code,
+                "fee_cents": require(row, "fee_cents", where),
+                "fee_basis": fee_basis,
+                "quantity": row.get("quantity", 1),
+                "currency_code": currency_code,
+                "notes": row.get("notes"),
+                "start_date": start_date,
+                "end_date": row.get("end_date", "9999-12-31"),
+            },
+            logical_key=(client_key, "client_services", service_code,
+                         locale_code, start_date),
+            source_path=source,
+        ))
 
 
 def _plan_client_pricing(client_id, client_key, pricing, plan, source):

@@ -66,6 +66,16 @@ def _load_all_dotenvs():
             _parse_dotenv(path)
 
 
+def _strip_inline_comment(value: str) -> str:
+    # A '#' starts a comment when it is at the start of the value or is
+    # preceded by whitespace. A '#' embedded mid-token (e.g. a password
+    # "abc#def") is left untouched.
+    for i, ch in enumerate(value):
+        if ch == "#" and (i == 0 or value[i - 1] in " \t"):
+            return value[:i].rstrip()
+    return value
+
+
 def _parse_dotenv(path: Path):
     for raw in path.read_text(encoding="utf-8").splitlines():
         line = raw.strip()
@@ -80,6 +90,8 @@ def _parse_dotenv(path: Path):
         value = value.strip()
         if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
             value = value[1:-1]
+        else:
+            value = _strip_inline_comment(value)
         if key and key not in os.environ:
             os.environ[key] = value
 

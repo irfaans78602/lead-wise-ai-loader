@@ -33,6 +33,7 @@ Folder: C:\Irfaan\leadwiseai\lead-wise-ai-loader
 |       +---10-schema-website.sql
 |       +---20-seed-base-website.sql
 |       +---30-seed-pricing-zar-website.sql
+|       +---35-seed-pilot-website.sql
 |       +---40-seed-pricing-gbp-website.sql
 |       +---50-seed-pricing-usd-website.sql
 |       \---99-update-contact-form settings.sql

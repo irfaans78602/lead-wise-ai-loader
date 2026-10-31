@@ -35,12 +35,11 @@ CLIENTS = EntitySpec(
         "closed_behavior": "closed_behavior",
         "reopen_policy": "reopen_policy",
         "allowed_origins": "allowed_origins",
-        
-        # NEW COLUMNS
         "lead_transactions_title": "lead_transactions_title",
         "display_first_name_question_id": "display_first_name_question_id",
         "display_last_name_question_id": "display_last_name_question_id",
-        "display_contact_question_id": "display_contact_question_id",
+        "display_phone_number_question_id": "display_phone_number_question_id",
+        "display_email_address_question_id": "display_email_address_question_id",
         
         "start_date": "start_date",
         "end_date": "end_date",

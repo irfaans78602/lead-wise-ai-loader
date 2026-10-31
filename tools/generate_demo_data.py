@@ -24,6 +24,38 @@ def random_date(start_dt, end_dt):
     return start_dt + timedelta(seconds=random.randint(0, int(delta.total_seconds())))
 
 
+def get_business_hour_timestamp(start_dt, end_dt):
+    """
+    Returns a random timestamp. 
+    95% between 7am and 7pm, 5% between 7pm and 7am.
+    """
+    day = random_date(start_dt, end_dt).replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    if random.random() < 0.95:
+        # Business hours: 7:00 to 19:00
+        hour = random.randint(7, 18)
+        minute = random.randint(0, 59)
+        second = random.randint(0, 59)
+    else:
+        # Outside business hours: 19:00 to 7:00
+        hour = random.choice([19, 20, 21, 22, 23, 0, 1, 2, 3, 4, 5, 6])
+        minute = random.randint(0, 59)
+        second = random.randint(0, 59)
+        
+    return day.replace(hour=hour, minute=minute, second=second)
+
+
+def chunked_insert(cur, table_name, sql, data, chunk_size=1000):
+    """Helper to insert data in chunks and log progress."""
+    total = len(data)
+    if total == 0:
+        return
+    for i in range(0, total, chunk_size):
+        chunk = data[i:i + chunk_size]
+        execute_values(cur, sql, chunk)
+        print(f"      ... inserted {min(i + chunk_size, total)} / {total} into {table_name}")
+
+
 def generate_data():
     args = parse_args()
 
@@ -63,14 +95,17 @@ def generate_data():
 
         print("\n[1/8] Reading Client Config...")
         cur.execute("""
-            SELECT display_first_name_question_id, display_last_name_question_id, display_contact_question_id 
+            SELECT display_first_name_question_id, display_last_name_question_id, 
+                   display_phone_number_question_id, display_email_address_question_id 
             FROM clients WHERE client_id = %s
         """, (TARGET_CLIENT_ID,))
         cfg = cur.fetchone()
+        
         first_qid = cfg['display_first_name_question_id'] if cfg else None
         last_qid = cfg['display_last_name_question_id'] if cfg else None
-        email_qid = cfg['display_contact_question_id'] if cfg else None
-        print(f"      -> First Name Q_ID: {first_qid}, Last Name Q_ID: {last_qid}, Email Q_ID: {email_qid}")
+        phone_qid = cfg['display_phone_number_question_id'] if cfg else None
+        email_qid = cfg['display_email_address_question_id'] if cfg else None
+        print(f"      -> First: {first_qid}, Last: {last_qid}, Phone: {phone_qid}, Email: {email_qid}")
 
         print("\n[2/8] Reading Ads...")
         cur.execute("""
@@ -103,7 +138,7 @@ def generate_data():
 
         print("\n[3/8] Reading FAQs...")
         cur.execute("""
-            SELECT faq_id, question_id, question_order, question_type
+            SELECT faq_id, question_id, question_order, question_type, mandatory
             FROM faqs
             WHERE ad_id = %s
             ORDER BY question_order
@@ -118,7 +153,7 @@ def generate_data():
             WHERE ad_id = %s
         """, (root_ad['ad_id'],))
         q_scores = cur.fetchall()
-        print(f"      -> Found {len(q_scores)} score bands: {', '.join([q['level_code'] for q in q_scores])}")
+        print(f"      -> Found {len(q_scores)} score bands.")
 
         if not faqs or not q_scores:
             raise ValueError("Missing FAQs or Qualification Scores on the root ad.")
@@ -126,9 +161,35 @@ def generate_data():
         all_question_orders = [f['question_order'] for f in faqs]
         abandon_points = all_question_orders[1:]
 
-        first_names = ["James", "Mary", "John", "Patricia", "Robert", "Jennifer", "Michael", "Linda", "William", "Elizabeth"]
-        last_names = ["Smith", "Johnson", "Williams", "Brown", "Jones", "Garcia", "Miller", "Davis", "Rodriguez", "Martinez"]
-        domains = ["gmail.com", "yahoo.com", "outlook.com", "hotmail.com", "icloud.com"]
+        # Name Pools
+        en_names = [("James", "Smith"), ("Mary", "Johnson"), ("John", "Williams"), ("Patricia", "Brown"), ("Robert", "Jones"), ("Jennifer", "Garcia")]
+        afr_names = [("Pieter", "van der Merwe"), ("Annelie", "Botha"), ("Johan", "Pretorius"), ("Elsa", "Coetzee")]
+        xhosa_names = [("Sipho", "Ndlovu"), ("Thabo", "Mokoena"), ("Lerato", "Dlamini"), ("Nomvula", "Nkosi"), ("Sibusiso", "Khumalo")]
+        zulu_names = [("Mandla", "Zulu"), ("Nandi", "Mahlangu"), ("Bongani", "Nkomo")]
+        sotho_names = [("Teboho", "Mokoena"), ("Palesa", "Mofokeng"), ("Kagiso", "Radebe")]
+
+        business_names = [
+            "Acme Corp", "Global Tech", "Cape Coffee Co", "Joburg Plumbing", "Sandton Legal",
+            "Durban Design", "Pretoria Paints", "Soweto Eats", "Cape Town Cabs", "Kruger Safaris",
+            "Blue Sky Media", "Nova Consulting", "Elite Auto", "Green Leaf Health", "Sunshine Retail"
+        ]
+
+        # Email Domains
+        domains = ["gmail.com"]*75 + ["yahoo.com"]*10 + ["mweb.com"]*5 + ["iafrica.com"]*10
+
+        # SA Phone prefixes
+        sa_mobile_prefixes = ["082", "083", "084", "060", "061", "062", "063", "064", "065", "066", "067", "068", "071", "072", "073", "074", "076", "078", "079", "081"]
+
+        def get_random_name():
+            roll = random.randint(1, 100)
+            if roll <= 30: return random.choice(en_names)
+            elif roll <= 40: return random.choice(afr_names)
+            elif roll <= 65: return random.choice(xhosa_names)
+            else: return random.choice(zulu_names + sotho_names)
+
+        def get_random_phone():
+            prefix = random.choice(sa_mobile_prefixes)
+            return f"+27{prefix[1:]}{random.randint(1000000, 9999999)}"
 
         target_ads = []
         for _ in range(3000):
@@ -140,7 +201,6 @@ def generate_data():
                 else:
                     target_ads.append(en_leaf)
 
-        # 75% completed, 25% abandoned
         conversation_types = ['abandoned'] * 750 + ['completed'] * 2250
         random.shuffle(conversation_types)
 
@@ -161,19 +221,32 @@ def generate_data():
             customer_id = i + 1 if i < 2000 else random.randint(1, 2000)
 
             conv_type = conversation_types[i]
-            conv_created_at = random_date(start_dt, end_dt)
-            created_at = conv_created_at - timedelta(minutes=random.randint(1, 60))
-
+            
+            # Timeline: Start in business hours, flow takes 10-20 mins
+            conv_created_at = get_business_hour_timestamp(start_dt, end_dt)
+            flow_duration_minutes = random.uniform(10, 20)
+            
             if conv_type == 'completed':
                 state = 'completed'
                 current_order = max(all_question_orders) + 1
-                completed_at = conv_created_at + timedelta(minutes=random.randint(2, 15))
-                
-                # Pending (System), Converted (60%), Contacted (25%), Withdrawn (5%)
+                completed_at = conv_created_at + timedelta(minutes=flow_duration_minutes)
+            else:
+                state = 'abandoned'
+                current_order = random.choice(abandon_points)
+                completed_at = None
+
+            created_at = conv_created_at - timedelta(minutes=random.randint(1, 5))
+
+            # Generate unique names for this customer
+            fname, lname = get_random_name()
+            email_domain = random.choice(domains)
+            email_addr = f"{fname.lower().replace(' ', '')}.{lname.lower().replace(' ', '')}{random.randint(1,99)}@{email_domain}"
+            phone_num = get_random_phone()
+
+            if conv_type == 'completed':
                 status = random.choices(
                     ['Pending', 'Converted', 'Contacted', 'Withdrawn'],
-                    weights=[10, 60, 25, 5],
-                    k=1
+                    weights=[10, 60, 25, 5], k=1
                 )[0]
                 
                 q_score_val = random.randint(60, 100)
@@ -186,15 +259,9 @@ def generate_data():
                     q_id = random.choice(q_scores)['qualification_score_id']
                     
             else:
-                state = 'abandoned'
-                current_order = random.choice(abandon_points)
-                completed_at = None
-                
-                # Abandoned leads cannot be Converted or Pending.
                 status = random.choices(
                     ['Not-Qualified', 'No-Response', 'Bad-Contact'],
-                    weights=[50, 30, 20],
-                    k=1
+                    weights=[50, 30, 20], k=1
                 )[0]
                 q_score_val = random.randint(0, 50)
                 q_id = None 
@@ -222,33 +289,54 @@ def generate_data():
                 q_order = faq['question_order']
                 q_type = faq['question_type']
                 
+                # Logic for Q5 (Business Name - Optional)
+                is_business_name = (q_type == 'business_name')
+                
+                # If it's Q5 and we roll > 60 (40% chance), we skip it entirely
+                if is_business_name and random.random() > 0.60:
+                    continue
+                
                 if q_order < current_order:
                     ans_text = None
                     ans_vals = None
                     
                     is_first = (first_qid and faq['question_id'] == first_qid) or (not first_qid and q_type == 'first_name')
                     is_last = (last_qid and faq['question_id'] == last_qid) or (not last_qid and q_type == 'last_name')
+                    is_phone = (phone_qid and faq['question_id'] == phone_qid) or (not phone_qid and q_type == 'phone_number')
                     is_email = (email_qid and faq['question_id'] == email_qid) or (not email_qid and q_type == 'email_address')
 
                     if is_first:
-                        ans_text = random.choice(first_names)
+                        ans_text = fname
                     elif is_last:
-                        ans_text = random.choice(last_names)
+                        ans_text = lname
+                    elif is_business_name:
+                        ans_text = random.choice(business_names)
+                    elif is_phone:
+                        ans_text = phone_num
                     elif is_email:
-                        fname = random.choice(first_names).lower()
-                        lname = random.choice(last_names).lower()
-                        rand_num = random.randint(1, 99)
-                        ans_text = f"{fname}.{lname}{rand_num}@{random.choice(domains)}"
-                    elif q_type in ('radio', 'dropdown_single'):
-                        ans_text = "1"
+                        ans_text = email_addr
                     elif q_type == 'dropdown_multi':
-                        ans_vals = json.dumps(["1", "2"])
+                        # Q6: Random subset of 1-5, no repeats, at least 2 options
+                        num_choices = random.randint(2, 5)
+                        chosen = random.sample(["1", "2", "3", "4", "5"], num_choices)
+                        ans_vals = json.dumps(chosen)
+                    elif q_type in ('radio', 'dropdown_single'):
+                        # Q7/Q8: Random between 1 and 4
+                        ans_text = str(random.randint(1, 4))
                     else:
                         ans_text = f"Sample answer for Q{q_order}"
 
+                    # Distribute the 10-20 minutes across the questions
+                    if current_order > 1:
+                        time_offset = (q_order / current_order) * flow_duration_minutes
+                    else:
+                        time_offset = 0
+
+                    answer_created_at = conv_created_at + timedelta(minutes=time_offset)
+
                     answers_data.append((
                         i + 1, faq_id, ans_text, ans_vals,
-                        conv_created_at + timedelta(seconds=q_order * 10)
+                        answer_created_at
                     ))
 
             if conv_type == 'completed':
@@ -262,45 +350,40 @@ def generate_data():
         print(f"      -> Generation complete.")
 
         print("\n[6/8] Inserting Customers and Conversations...")
-        execute_values(cur, """
+        chunked_insert(cur, "customers", """
             INSERT INTO customers (
                 customer_id, ad_id, demo_session_id, channel, channel_user_id,
                 status, qualification_score, qualification_id, created_at
             ) OVERRIDING SYSTEM VALUE VALUES %s ON CONFLICT DO NOTHING
         """, customers_data)
-        print(f"      -> Inserted {len(customers_data)} customers.")
 
-        execute_values(cur, """
+        chunked_insert(cur, "conversations", """
             INSERT INTO conversations (
                 conversation_id, customer_id, current_order, state,
                 completed_at, created_at
             ) OVERRIDING SYSTEM VALUE VALUES %s ON CONFLICT DO NOTHING
         """, conversations_data)
-        print(f"      -> Inserted {len(conversations_data)} conversations.")
 
         print("\n[7/8] Inserting Answers and Qualifications...")
-        execute_values(cur, """
+        chunked_insert(cur, "answers", """
             INSERT INTO answers (
                 conversation_id, faq_id, answer_text, answer_values, created_at
             ) VALUES %s ON CONFLICT DO NOTHING
         """, answers_data)
-        print(f"      -> Inserted {len(answers_data)} answers.")
 
-        execute_values(cur, """
+        chunked_insert(cur, "qualifications", """
             INSERT INTO qualifications (
                 conversation_id, customer_id, ad_id, qualification_score,
                 qualification_id, qualified_at, created_at
             ) VALUES %s ON CONFLICT DO NOTHING
         """, qualifications_data)
-        print(f"      -> Inserted {len(qualifications_data)} qualifications.")
 
         print("\n[8/8] Inserting Customer Statuses...")
-        execute_values(cur, """
+        chunked_insert(cur, "customer_statuses", """
             INSERT INTO customer_statuses (
                 customer_id, status, note, changed_at
             ) VALUES %s ON CONFLICT DO NOTHING
         """, statuses_data)
-        print(f"      -> Inserted {len(statuses_data)} status history records.")
 
         print("\nResetting sequences...")
         cur.execute("SELECT setval(pg_get_serial_sequence('customers', 'customer_id'), coalesce(max(customer_id), 1)) FROM customers;")

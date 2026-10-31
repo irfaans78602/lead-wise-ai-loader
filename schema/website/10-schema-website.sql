@@ -270,10 +270,11 @@ CREATE TABLE clients (
                                 OR allowed_origins ~ '^https?://[a-z0-9.-]+(:[0-9]{1,5})?(,https?://[a-z0-9.-]+(:[0-9]{1,5})?)*$'),
 
     -- Data-driven display columns for the Leads table (faqs.question_id references)
-	lead_transactions_title      JSONB,
-    display_first_name_question_id SMALLINT,
-    display_last_name_question_id  SMALLINT,
-    display_contact_question_id    SMALLINT,
+	lead_transactions_title              JSONB,
+    display_first_name_question_id       SMALLINT,
+    display_last_name_question_id        SMALLINT,
+    display_phone_number_question_id     SMALLINT,
+	display_email_address_question_id    SMALLINT,
 
     start_date           DATE NOT NULL DEFAULT '1900-01-01',
     end_date             DATE NOT NULL DEFAULT '9999-12-31',

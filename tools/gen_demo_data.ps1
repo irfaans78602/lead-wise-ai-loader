@@ -7,7 +7,7 @@
     This script uses the $args array instead of param() so you can pass
     double-dash arguments (--start-date).
 
-    If --end-date is not provided, it defaults to the current date.
+    If --end-date is not provided, Python will default to the exact current date and time.
 
 .EXAMPLE
     .\tools\gen_demo_data.ps1 --start-date "2026-07-01"
@@ -25,9 +25,8 @@ if (-not (Test-Path $PythonScript)) {
     exit 1
 }
 
-# Default to today for end-date
 $StartDate = $null
-$EndDate = (Get-Date -Format "yyyy-MM-dd")
+$EndDate = $null
 
 # Parse the $args array manually
 for ($i = 0; $i -lt $args.Length; $i++) {
@@ -53,12 +52,20 @@ if (-not $StartDate) {
     exit 1
 }
 
-Write-Host "Generating demo data from $StartDate to $EndDate..." -ForegroundColor Cyan
+# Build the argument list for Python
+$PythonArgs = @($PythonScript, "--start-date", $StartDate)
+
+if ($EndDate) {
+    Write-Host "Generating demo data from $StartDate to $EndDate..." -ForegroundColor Cyan
+    $PythonArgs += @("--end-date", $EndDate)
+} else {
+    Write-Host "Generating demo data from $StartDate to the current date and time..." -ForegroundColor Cyan
+}
 
 Push-Location $ProjectRoot
 try {
-    # Pass the arguments to Python
-    & python $PythonScript --start-date $StartDate --end-date $EndDate
+    # Run Python with the arguments
+    & python @PythonArgs
     if ($LASTEXITCODE -ne 0) {
         Write-Host "Demo data generation failed." -ForegroundColor Red
         exit $LASTEXITCODE

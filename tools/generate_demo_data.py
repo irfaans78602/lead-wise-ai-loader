@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 def parse_args():
     parser = argparse.ArgumentParser(description="Generate demo data for LeadWise AI.")
     parser.add_argument("--start-date", required=True, help="Start date (YYYY-MM-DD).")
-    parser.add_argument("--end-date", required=True, help="End date (YYYY-MM-DD).")
+    parser.add_argument("--end-date", help="End date (YYYY-MM-DD). Defaults to current time.")
     return parser.parse_args()
 
 
@@ -29,24 +29,28 @@ def get_business_hour_timestamp(start_dt, end_dt):
     Returns a random timestamp. 
     95% between 7am and 7pm, 5% between 7pm and 7am.
     """
-    day = random_date(start_dt, end_dt).replace(hour=0, minute=0, second=0, microsecond=0)
+    # Ensure we don't generate a timestamp in the future if end_dt is today
+    max_day = min(end_dt, datetime.now(timezone.utc))
+    day = random_date(start_dt, max_day).replace(hour=0, minute=0, second=0, microsecond=0)
     
     if random.random() < 0.95:
-        # Business hours: 7:00 to 19:00
         hour = random.randint(7, 18)
-        minute = random.randint(0, 59)
-        second = random.randint(0, 59)
     else:
-        # Outside business hours: 19:00 to 7:00
         hour = random.choice([19, 20, 21, 22, 23, 0, 1, 2, 3, 4, 5, 6])
-        minute = random.randint(0, 59)
-        second = random.randint(0, 59)
         
-    return day.replace(hour=hour, minute=minute, second=second)
+    minute = random.randint(0, 59)
+    second = random.randint(0, 59)
+        
+    result = day.replace(hour=hour, minute=minute, second=second)
+    
+    # If the randomly generated time is somehow in the future, cap it
+    if result > datetime.now(timezone.utc):
+        result = datetime.now(timezone.utc) - timedelta(minutes=random.randint(1, 60))
+        
+    return result
 
 
 def chunked_insert(cur, table_name, sql, data, chunk_size=1000):
-    """Helper to insert data in chunks and log progress."""
     total = len(data)
     if total == 0:
         return
@@ -75,14 +79,19 @@ def generate_data():
 
     try:
         start_dt = datetime.strptime(args.start_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
-        end_dt = datetime.strptime(args.end_date, "%Y-%m-%d").replace(
-            hour=23, minute=59, second=59, tzinfo=timezone.utc
-        )
+        
+        # If --end-date is provided, use it. Otherwise, use right now.
+        if args.end_date:
+            end_dt = datetime.strptime(args.end_date, "%Y-%m-%d").replace(
+                hour=23, minute=59, second=59, tzinfo=timezone.utc
+            )
+        else:
+            end_dt = datetime.now(timezone.utc)
+            
     except ValueError as e:
         raise ValueError(f"Invalid date format. Use YYYY-MM-DD. Error: {e}")
 
-    print(f"  Date Range:      {start_dt.strftime('%Y-%m-%d')} to {end_dt.strftime('%Y-%m-%d')}")
-    print(f"  Random Seed:     42")
+    print(f"  Date Range:      {start_dt.strftime('%Y-%m-%d')} to {end_dt.strftime('%Y-%m-%d %H:%M')}")
 
     print("\nConnecting to database...")
     
@@ -222,7 +231,6 @@ def generate_data():
 
             conv_type = conversation_types[i]
             
-            # Timeline: Start in business hours, flow takes 10-20 mins
             conv_created_at = get_business_hour_timestamp(start_dt, end_dt)
             flow_duration_minutes = random.uniform(10, 20)
             
@@ -237,7 +245,6 @@ def generate_data():
 
             created_at = conv_created_at - timedelta(minutes=random.randint(1, 5))
 
-            # Generate unique names for this customer
             fname, lname = get_random_name()
             email_domain = random.choice(domains)
             email_addr = f"{fname.lower().replace(' ', '')}.{lname.lower().replace(' ', '')}{random.randint(1,99)}@{email_domain}"
@@ -289,10 +296,8 @@ def generate_data():
                 q_order = faq['question_order']
                 q_type = faq['question_type']
                 
-                # Logic for Q5 (Business Name - Optional)
                 is_business_name = (q_type == 'business_name')
                 
-                # If it's Q5 and we roll > 60 (40% chance), we skip it entirely
                 if is_business_name and random.random() > 0.60:
                     continue
                 
@@ -316,17 +321,14 @@ def generate_data():
                     elif is_email:
                         ans_text = email_addr
                     elif q_type == 'dropdown_multi':
-                        # Q6: Random subset of 1-5, no repeats, at least 2 options
                         num_choices = random.randint(2, 5)
                         chosen = random.sample(["1", "2", "3", "4", "5"], num_choices)
                         ans_vals = json.dumps(chosen)
                     elif q_type in ('radio', 'dropdown_single'):
-                        # Q7/Q8: Random between 1 and 4
                         ans_text = str(random.randint(1, 4))
                     else:
                         ans_text = f"Sample answer for Q{q_order}"
 
-                    # Distribute the 10-20 minutes across the questions
                     if current_order > 1:
                         time_offset = (q_order / current_order) * flow_duration_minutes
                     else:

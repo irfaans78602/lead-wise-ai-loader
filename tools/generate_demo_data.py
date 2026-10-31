@@ -29,7 +29,6 @@ def get_business_hour_timestamp(start_dt, end_dt):
     Returns a random timestamp. 
     95% between 7am and 7pm, 5% between 7pm and 7am.
     """
-    # Ensure we don't generate a timestamp in the future if end_dt is today
     max_day = min(end_dt, datetime.now(timezone.utc))
     day = random_date(start_dt, max_day).replace(hour=0, minute=0, second=0, microsecond=0)
     
@@ -43,7 +42,6 @@ def get_business_hour_timestamp(start_dt, end_dt):
         
     result = day.replace(hour=hour, minute=minute, second=second)
     
-    # If the randomly generated time is somehow in the future, cap it
     if result > datetime.now(timezone.utc):
         result = datetime.now(timezone.utc) - timedelta(minutes=random.randint(1, 60))
         
@@ -80,7 +78,6 @@ def generate_data():
     try:
         start_dt = datetime.strptime(args.start_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
         
-        # If --end-date is provided, use it. Otherwise, use right now.
         if args.end_date:
             end_dt = datetime.strptime(args.end_date, "%Y-%m-%d").replace(
                 hour=23, minute=59, second=59, tzinfo=timezone.utc
@@ -227,6 +224,8 @@ def generate_data():
 
             target_ad = target_ads[i]
             target_ad_id = target_ad['ad_id']
+            
+            # Ensure customer_id is unique for the first 2000
             customer_id = i + 1 if i < 2000 else random.randint(1, 2000)
 
             conv_type = conversation_types[i]
@@ -274,18 +273,35 @@ def generate_data():
                 q_id = None 
 
             if i < 2000:
+                # Insert the customer
                 customers_data.append((
                     customer_id, target_ad_id, None, 'chat',
                     f"user_{customer_id}", status, q_score_val, q_id, created_at
                 ))
 
-                note = random.choice([
-                    "Customer requested pricing information.",
-                    "Budget confirmation outstanding.",
-                    "Decision-maker details provided.",
-                    "Follow-up required regarding implementation timeline."
-                ])
-                statuses_data.append((customer_id, status, note, created_at))
+                # 1. Always start with Pending
+                statuses_data.append((customer_id, 'Pending', 'First contact', created_at))
+                
+                # 2. If they completed, they move through 1-3 random statuses before settling on the final one
+                if conv_type == 'completed':
+                    intermediate_pool = ['Contacted', 'Callback-Requested', 'No-Response', 'Bad-Contact', 'Duplicate', 'Qualified']
+                    num_moves = random.randint(1, 3)
+                    moves = random.choices(intermediate_pool, k=num_moves)
+                    
+                    if status not in moves:
+                        moves.append(status)
+                        
+                    current_time = created_at
+                    for move in moves:
+                        current_time += timedelta(minutes=random.randint(5, 60))
+                        note = random.choice([
+                            "Called but no answer.",
+                            "Customer requested pricing.",
+                            "Follow-up scheduled.",
+                            "Email sent.",
+                            "Decision maker unavailable."
+                        ])
+                        statuses_data.append((customer_id, move, note, current_time))
 
             conversations_data.append((
                 i + 1, customer_id, current_order, state, completed_at, conv_created_at

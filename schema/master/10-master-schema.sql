@@ -5,7 +5,29 @@
 
 BEGIN;
 
+-- -------------------------------------------------------------
+-- Show timestamps in South African time. Stored TIMESTAMPTZ values
+-- are unchanged (absolute instants); this only sets how new sessions
+-- display them (+02 instead of +00). Existing connections keep their
+-- old setting until they reconnect.
+-- -------------------------------------------------------------
+DO $tz$
+BEGIN
+    EXECUTE format('ALTER DATABASE %I SET timezone TO %L',
+                   current_database(), 'Africa/Johannesburg');
+END
+$tz$;
+
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- -------------------------------------------------------------
+-- South Africa "today". CURRENT_DATE follows the session time zone
+-- (UTC on most hosts), so between 00:00 and 02:00 SAST it still
+-- returns yesterday. All effective-date logic uses this instead.
+-- -------------------------------------------------------------
+CREATE OR REPLACE FUNCTION sa_today() RETURNS DATE
+LANGUAGE sql STABLE AS
+$$ SELECT (now() AT TIME ZONE 'Africa/Johannesburg')::date $$;
 
 -- -------------------------------------------------------------
 -- 1. Tiers
@@ -169,7 +191,7 @@ CREATE TABLE settings (
 CREATE INDEX settings_active_idx ON settings (start_date, end_date);
 CREATE UNIQUE INDEX settings_key_active_idx ON settings (setting_key) WHERE end_date = '9999-12-31';
 
-CREATE VIEW active_settings AS SELECT * FROM settings WHERE start_date <= CURRENT_DATE AND CURRENT_DATE <= end_date;
+CREATE VIEW active_settings AS SELECT * FROM settings WHERE start_date <= sa_today() AND sa_today() <= end_date;
 
 CREATE TABLE tenant_usage_log (
     log_id          BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -209,9 +231,9 @@ SELECT
 FROM clients c
 LEFT JOIN instances i 
        ON i.client_id = c.client_id 
-      AND CURRENT_DATE BETWEEN i.start_date AND i.end_date
+      AND sa_today() BETWEEN i.start_date AND i.end_date
 WHERE c.status IN ('active', 'trial')
-  AND CURRENT_DATE BETWEEN c.start_date AND c.end_date;
+  AND sa_today() BETWEEN c.start_date AND c.end_date;
 
 CREATE VIEW v_tenant_config AS
 SELECT
@@ -232,8 +254,8 @@ JOIN clients c ON c.client_id = i.client_id
 LEFT JOIN client_subscriptions s ON s.client_id = c.client_id
 LEFT JOIN tiers t ON t.tier_id = s.tier_id
 WHERE c.status IN ('active', 'trial')
-  AND CURRENT_DATE BETWEEN c.start_date AND c.end_date
-  AND CURRENT_DATE BETWEEN i.start_date AND i.end_date;
+  AND sa_today() BETWEEN c.start_date AND c.end_date
+  AND sa_today() BETWEEN i.start_date AND i.end_date;
 
 CREATE VIEW active_clients AS
 SELECT
@@ -258,6 +280,6 @@ FROM clients c
 LEFT JOIN client_subscriptions s ON s.client_id = c.client_id
 LEFT JOIN tiers t ON t.tier_id = s.tier_id
 WHERE c.status IN ('active', 'trial')
-  AND CURRENT_DATE BETWEEN c.start_date AND c.end_date;
+  AND sa_today() BETWEEN c.start_date AND c.end_date;
 
 COMMIT;

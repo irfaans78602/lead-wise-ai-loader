@@ -6,7 +6,30 @@
 
 BEGIN;
 
+-- -------------------------------------------------------------
+-- Show timestamps in South African time. Stored TIMESTAMPTZ values
+-- are unchanged (absolute instants); this only sets how new sessions
+-- display them (+02 instead of +00). Existing connections keep their
+-- old setting until they reconnect.
+-- -------------------------------------------------------------
+DO $tz$
+BEGIN
+    EXECUTE format('ALTER DATABASE %I SET timezone TO %L',
+                   current_database(), 'Africa/Johannesburg');
+END
+$tz$;
+
 CREATE EXTENSION IF NOT EXISTS vector;
+
+-- -------------------------------------------------------------
+-- South Africa "today". CURRENT_DATE follows the session time zone
+-- (UTC on most hosts), so between 00:00 and 02:00 SAST it still
+-- returns yesterday. Use this for site_content start_date/end_date
+-- filtering in retrieval queries.
+-- -------------------------------------------------------------
+CREATE OR REPLACE FUNCTION sa_today() RETURNS DATE
+LANGUAGE sql STABLE AS
+$$ SELECT (now() AT TIME ZONE 'Africa/Johannesburg')::date $$;
 
 -- =============================================================
 -- 1. Ask AI — RAG CONTENT (VECTOR STORE)

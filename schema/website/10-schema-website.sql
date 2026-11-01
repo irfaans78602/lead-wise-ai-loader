@@ -5,7 +5,29 @@
 
 BEGIN;
 
+-- -------------------------------------------------------------
+-- Show timestamps in South African time. Stored TIMESTAMPTZ values
+-- are unchanged (absolute instants); this only sets how new sessions
+-- display them (+02 instead of +00). Existing connections keep their
+-- old setting until they reconnect.
+-- -------------------------------------------------------------
+DO $tz$
+BEGIN
+    EXECUTE format('ALTER DATABASE %I SET timezone TO %L',
+                   current_database(), 'Africa/Johannesburg');
+END
+$tz$;
+
 CREATE EXTENSION IF NOT EXISTS btree_gist;
+
+-- -------------------------------------------------------------
+-- South Africa "today". CURRENT_DATE follows the session time zone
+-- (UTC on most hosts), so between 00:00 and 02:00 SAST it still
+-- returns yesterday. All effective-date logic uses this instead.
+-- -------------------------------------------------------------
+CREATE OR REPLACE FUNCTION sa_today() RETURNS DATE
+LANGUAGE sql STABLE AS
+$$ SELECT (now() AT TIME ZONE 'Africa/Johannesburg')::date $$;
 
 -- =============================================================
 -- 1. Languages
@@ -345,7 +367,7 @@ CREATE INDEX demo_sessions_expires_idx ON demo_sessions (expires_at);
 -- cannot have both a wildcard and a specific-locale current
 -- contract for the same (service_code) -- enforced by trigger.
 --
--- Active rows are those where CURRENT_DATE is between start_date
+-- Active rows are those where sa_today() is between start_date
 -- and end_date. The specific contracted fee lives here; the
 -- published floor and ceiling live in pricing_* tables.
 -- =============================================================
@@ -495,7 +517,7 @@ CREATE TABLE pricing_discounts (
     discount_pct         NUMERIC(5,2) NOT NULL,
     label                TEXT NOT NULL,
     reason               TEXT,
-    start_date           DATE NOT NULL DEFAULT CURRENT_DATE,
+    start_date           DATE NOT NULL DEFAULT sa_today(),
     end_date             DATE NOT NULL DEFAULT '9999-12-31',
     created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
     CHECK (start_date <= end_date),
@@ -1022,30 +1044,30 @@ $$;
 -- =============================================================
 -- 36. Active views
 -- =============================================================
-CREATE VIEW active_languages AS SELECT * FROM languages WHERE start_date <= CURRENT_DATE AND CURRENT_DATE <= end_date;
-CREATE VIEW active_currencies AS SELECT * FROM currencies WHERE start_date <= CURRENT_DATE AND CURRENT_DATE <= end_date;
-CREATE VIEW active_countries AS SELECT * FROM countries WHERE start_date <= CURRENT_DATE AND CURRENT_DATE <= end_date;
-CREATE VIEW active_segments AS SELECT * FROM segments WHERE start_date <= CURRENT_DATE AND CURRENT_DATE <= end_date;
-CREATE VIEW active_messages AS SELECT * FROM messages WHERE start_date <= CURRENT_DATE AND CURRENT_DATE <= end_date;
-CREATE VIEW active_pricing_tiers AS SELECT * FROM pricing_tiers WHERE start_date <= CURRENT_DATE AND CURRENT_DATE <= end_date;
-CREATE VIEW active_pricing_segment_tiers AS SELECT * FROM pricing_segment_tiers WHERE start_date <= CURRENT_DATE AND CURRENT_DATE <= end_date;
-CREATE VIEW active_pricing_rates AS SELECT * FROM pricing_rates WHERE start_date <= CURRENT_DATE AND CURRENT_DATE <= end_date;
-CREATE VIEW active_pricing_website AS SELECT * FROM pricing_website WHERE start_date <= CURRENT_DATE AND CURRENT_DATE <= end_date;
-CREATE VIEW active_pricing_addons AS SELECT * FROM pricing_addons WHERE start_date <= CURRENT_DATE AND CURRENT_DATE <= end_date;
-CREATE VIEW active_pricing_pilot AS SELECT * FROM pricing_pilot WHERE start_date <= CURRENT_DATE AND CURRENT_DATE <= end_date;
-CREATE VIEW active_pricing_discounts AS SELECT * FROM pricing_discounts WHERE start_date <= CURRENT_DATE AND CURRENT_DATE <= end_date;
-CREATE VIEW active_agencies AS SELECT * FROM agencies WHERE start_date <= CURRENT_DATE AND CURRENT_DATE <= end_date;
-CREATE VIEW active_clients AS SELECT * FROM clients WHERE start_date <= CURRENT_DATE AND CURRENT_DATE <= end_date;
-CREATE VIEW active_client_messages AS SELECT * FROM client_messages WHERE start_date <= CURRENT_DATE AND CURRENT_DATE <= end_date;
-CREATE VIEW active_ads AS SELECT * FROM ads WHERE start_date <= CURRENT_DATE AND CURRENT_DATE <= end_date;
-CREATE VIEW active_ad_confirmations AS SELECT * FROM ad_confirmations WHERE start_date <= CURRENT_DATE AND CURRENT_DATE <= end_date;
-CREATE VIEW active_ad_reopen_prompts AS SELECT * FROM ad_reopen_prompts WHERE start_date <= CURRENT_DATE AND CURRENT_DATE <= end_date;
-CREATE VIEW active_faqs AS SELECT * FROM faqs WHERE start_date <= CURRENT_DATE AND CURRENT_DATE <= end_date;
-CREATE VIEW active_qualification_levels AS SELECT * FROM qualification_levels WHERE start_date <= CURRENT_DATE AND CURRENT_DATE <= end_date;
-CREATE VIEW active_qualification_score AS SELECT * FROM qualification_score WHERE start_date <= CURRENT_DATE AND CURRENT_DATE <= end_date;
-CREATE VIEW active_agency_users AS SELECT * FROM agency_users WHERE start_date <= CURRENT_DATE AND CURRENT_DATE <= end_date;
-CREATE VIEW active_client_users AS SELECT * FROM client_users WHERE start_date <= CURRENT_DATE AND CURRENT_DATE <= end_date;
-CREATE VIEW active_settings AS SELECT * FROM settings WHERE start_date <= CURRENT_DATE AND CURRENT_DATE <= end_date;
+CREATE VIEW active_languages AS SELECT * FROM languages WHERE start_date <= sa_today() AND sa_today() <= end_date;
+CREATE VIEW active_currencies AS SELECT * FROM currencies WHERE start_date <= sa_today() AND sa_today() <= end_date;
+CREATE VIEW active_countries AS SELECT * FROM countries WHERE start_date <= sa_today() AND sa_today() <= end_date;
+CREATE VIEW active_segments AS SELECT * FROM segments WHERE start_date <= sa_today() AND sa_today() <= end_date;
+CREATE VIEW active_messages AS SELECT * FROM messages WHERE start_date <= sa_today() AND sa_today() <= end_date;
+CREATE VIEW active_pricing_tiers AS SELECT * FROM pricing_tiers WHERE start_date <= sa_today() AND sa_today() <= end_date;
+CREATE VIEW active_pricing_segment_tiers AS SELECT * FROM pricing_segment_tiers WHERE start_date <= sa_today() AND sa_today() <= end_date;
+CREATE VIEW active_pricing_rates AS SELECT * FROM pricing_rates WHERE start_date <= sa_today() AND sa_today() <= end_date;
+CREATE VIEW active_pricing_website AS SELECT * FROM pricing_website WHERE start_date <= sa_today() AND sa_today() <= end_date;
+CREATE VIEW active_pricing_addons AS SELECT * FROM pricing_addons WHERE start_date <= sa_today() AND sa_today() <= end_date;
+CREATE VIEW active_pricing_pilot AS SELECT * FROM pricing_pilot WHERE start_date <= sa_today() AND sa_today() <= end_date;
+CREATE VIEW active_pricing_discounts AS SELECT * FROM pricing_discounts WHERE start_date <= sa_today() AND sa_today() <= end_date;
+CREATE VIEW active_agencies AS SELECT * FROM agencies WHERE start_date <= sa_today() AND sa_today() <= end_date;
+CREATE VIEW active_clients AS SELECT * FROM clients WHERE start_date <= sa_today() AND sa_today() <= end_date;
+CREATE VIEW active_client_messages AS SELECT * FROM client_messages WHERE start_date <= sa_today() AND sa_today() <= end_date;
+CREATE VIEW active_ads AS SELECT * FROM ads WHERE start_date <= sa_today() AND sa_today() <= end_date;
+CREATE VIEW active_ad_confirmations AS SELECT * FROM ad_confirmations WHERE start_date <= sa_today() AND sa_today() <= end_date;
+CREATE VIEW active_ad_reopen_prompts AS SELECT * FROM ad_reopen_prompts WHERE start_date <= sa_today() AND sa_today() <= end_date;
+CREATE VIEW active_faqs AS SELECT * FROM faqs WHERE start_date <= sa_today() AND sa_today() <= end_date;
+CREATE VIEW active_qualification_levels AS SELECT * FROM qualification_levels WHERE start_date <= sa_today() AND sa_today() <= end_date;
+CREATE VIEW active_qualification_score AS SELECT * FROM qualification_score WHERE start_date <= sa_today() AND sa_today() <= end_date;
+CREATE VIEW active_agency_users AS SELECT * FROM agency_users WHERE start_date <= sa_today() AND sa_today() <= end_date;
+CREATE VIEW active_client_users AS SELECT * FROM client_users WHERE start_date <= sa_today() AND sa_today() <= end_date;
+CREATE VIEW active_settings AS SELECT * FROM settings WHERE start_date <= sa_today() AND sa_today() <= end_date;
 
 CREATE VIEW active_ads_with_active_clients AS
 SELECT a.* FROM active_ads a JOIN active_clients c ON c.client_id = a.client_id;
@@ -1094,10 +1116,10 @@ WHERE COALESCE(ans.answered, 0) + COALESCE(abn.abandoned, 0) > 0
 ORDER BY a.client_id, f.ad_id, f.question_order;
 
 -- =============================================================
--- 38. Live Chat Funnel View
+-- 38. Live Chat Funnel View (days are South African calendar days)
 -- =============================================================
 CREATE OR REPLACE VIEW v_live_chat_funnel AS
-SELECT client_id, ad_id, date_trunc('day', created_at)::date AS day, status, count(*) AS messages
+SELECT client_id, ad_id, date_trunc('day', created_at AT TIME ZONE 'Africa/Johannesburg')::date AS day, status, count(*) AS messages
 FROM live_chat_logs
 GROUP BY client_id, ad_id, day, status;
 
@@ -1121,8 +1143,8 @@ ORDER BY client_id, ad_id, n DESC;
 CREATE VIEW active_client_services AS
 SELECT *
 FROM client_services
-WHERE start_date <= CURRENT_DATE
-  AND CURRENT_DATE <= end_date;
+WHERE start_date <= sa_today()
+  AND sa_today() <= end_date;
 
 -- =============================================================
 -- 41. Dashboard Indexes (plain CREATE INDEX: runs inside the transaction)

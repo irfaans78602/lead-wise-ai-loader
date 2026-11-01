@@ -314,6 +314,7 @@ CREATE TABLE clients (
 
     -- Data-driven display columns for the Leads table (faqs.question_id references)
 	lead_transactions_title              JSONB,
+    display_full_name_question_id        SMALLINT,
     display_first_name_question_id       SMALLINT,
     display_last_name_question_id        SMALLINT,
     display_phone_number_question_id     SMALLINT,
@@ -643,7 +644,7 @@ CREATE TABLE faqs (
     question_order   INT NOT NULL,
     question_text    JSONB NOT NULL,
     question_type    TEXT NOT NULL CHECK (question_type IN (
-        'free_text','first_name','last_name','business_name',
+        'free_text','first_name','last_name','full_name','business_name',
         'phone_number','email_address','radio','dropdown_single','dropdown_multi'
     )),
     options          JSONB,
@@ -658,7 +659,7 @@ CREATE TABLE faqs (
     CHECK (jsonb_typeof(question_text) = 'object'),
     CHECK (depends_on IS NULL OR jsonb_typeof(depends_on) = 'object'),
     CHECK (
-        (question_type IN ('free_text','first_name','last_name','business_name','phone_number','email_address') AND options IS NULL)
+        (question_type IN ('free_text','first_name','last_name','full_name','business_name','phone_number','email_address') AND options IS NULL)
         OR
         (question_type IN ('radio','dropdown_single','dropdown_multi') AND options IS NOT NULL AND jsonb_typeof(options) = 'array' AND jsonb_array_length(options) > 0)
     )
@@ -1179,3 +1180,5 @@ CREATE INDEX IF NOT EXISTS idx_answers_faq_created
 ON answers (faq_id, created_at DESC);
 
 COMMIT;
+
+

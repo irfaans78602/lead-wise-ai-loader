@@ -36,6 +36,7 @@ CLIENTS = EntitySpec(
         "reopen_policy": "reopen_policy",
         "allowed_origins": "allowed_origins",
         "lead_transactions_title": "lead_transactions_title",
+        "display_full_name_question_id": "display_full_name_question_id",
         "display_first_name_question_id": "display_first_name_question_id",
         "display_last_name_question_id": "display_last_name_question_id",
         "display_phone_number_question_id": "display_phone_number_question_id",
@@ -268,3 +269,4 @@ ALL = {
         LIVE_CHAT_LOGS,
     )
 }
+

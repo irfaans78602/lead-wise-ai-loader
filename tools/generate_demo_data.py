@@ -108,17 +108,19 @@ def generate_data():
 
         print("\n[1/8] Reading Client Config...")
         cur.execute("""
-            SELECT display_first_name_question_id, display_last_name_question_id, 
+            SELECT display_full_name_question_id,
+                   display_first_name_question_id, display_last_name_question_id, 
                    display_phone_number_question_id, display_email_address_question_id 
             FROM clients WHERE client_id = %s
         """, (TARGET_CLIENT_ID,))
         cfg = cur.fetchone()
         
+        full_qid = cfg['display_full_name_question_id'] if cfg else None
         first_qid = cfg['display_first_name_question_id'] if cfg else None
         last_qid = cfg['display_last_name_question_id'] if cfg else None
         phone_qid = cfg['display_phone_number_question_id'] if cfg else None
         email_qid = cfg['display_email_address_question_id'] if cfg else None
-        print(f"      -> First: {first_qid}, Last: {last_qid}, Phone: {phone_qid}, Email: {email_qid}")
+        print(f"      -> Full: {full_qid}, First: {first_qid}, Last: {last_qid}, Phone: {phone_qid}, Email: {email_qid}")
 
         print("\n[2/8] Reading Ads...")
         cur.execute("""
@@ -349,12 +351,15 @@ def generate_data():
                     ans_text = None
                     ans_vals = None
                     
+                    is_full = (full_qid and faq['question_id'] == full_qid) or (not full_qid and q_type == 'full_name')
                     is_first = (first_qid and faq['question_id'] == first_qid) or (not first_qid and q_type == 'first_name')
                     is_last = (last_qid and faq['question_id'] == last_qid) or (not last_qid and q_type == 'last_name')
                     is_phone = (phone_qid and faq['question_id'] == phone_qid) or (not phone_qid and q_type == 'phone_number')
                     is_email = (email_qid and faq['question_id'] == email_qid) or (not email_qid and q_type == 'email_address')
 
-                    if is_first:
+                    if is_full:
+                        ans_text = f"{fname} {lname}"
+                    elif is_first:
                         ans_text = fname
                     elif is_last:
                         ans_text = lname
@@ -452,3 +457,4 @@ def generate_data():
 
 if __name__ == "__main__":
     generate_data()
+

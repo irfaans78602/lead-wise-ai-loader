@@ -1125,3 +1125,35 @@ WHERE start_date <= CURRENT_DATE
   AND CURRENT_DATE <= end_date;
 
 COMMIT;
+
+-- =============================================================
+-- 99. Dashboard Indexes - CONCURRENTLY can't run within a Traansaction
+-- =============================================================
+
+-- 1. Ads: Speeds up fetching the client's active ads and filtering by reuse_ad_id
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_ads_client_reuse 
+ON ads (client_id, reuse_ad_id);
+
+-- 2. Customers: Speeds up the main Funnel, Overview, and Trend queries 
+-- which filter by ad_id and a specific date range (created_at).
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_customers_ad_created 
+ON customers (ad_id, created_at DESC);
+
+-- 3. Customers: Speeds up Demo mode fetching, which filters by ad_id, 
+-- demo_session_id, and date range.
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_customers_ad_demo_created 
+ON customers (ad_id, demo_session_id, created_at DESC);
+
+-- 4. Conversations: Speeds up the Funnel counts by state (completed/abandoned)
+-- and the avg response time calculation.
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_conversations_customer_state 
+ON conversations (customer_id, state);
+
+-- 5. Answers: Crucial for the new Drop-off logic. 
+-- It finds the MAX question answered per conversation, filtered by date.
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_answers_conversation_created 
+ON answers (conversation_id, created_at DESC);
+
+-- 6. Answers: Speeds up the join between answers and faqs for the drop-off logic
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_answers_faq_created 
+ON answers (faq_id, created_at DESC);

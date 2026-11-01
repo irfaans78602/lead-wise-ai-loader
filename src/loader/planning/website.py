@@ -152,6 +152,14 @@ def _plan_client(client: dict, plan: Plan, source: str):
         _plan_client_services(client_id, key, services, plan, source,
                               default_currency=client.get("currency_code"))
 
+    # Nested client_users (single-client file shape). The parent's
+    # client_key is authoritative -- it overrides anything on the
+    # individual user entry, since a nested user by definition belongs
+    # to this client. _plan_client_user resolves it via plan.refs, so
+    # client_id lands as the UUID derived from the same key.
+    for user in client.get("client_users", []):
+        _plan_client_user({**user, "client_key": key}, plan, source)
+
 
 def _plan_client_message(client_id, client_key, msg, plan, source):
     spec = entities.CLIENT_MESSAGES
@@ -309,40 +317,51 @@ def _plan_pricing_discount(client_id, client_key, row: dict,
 
 def _plan_client_user(user: dict, plan: Plan, source: str):
     spec = entities.CLIENT_USERS
-    google_sub = require(user, "google_sub", "client_users")
 
-    if ("client_user", google_sub) in plan.refs:
+    google_sub = user.get("google_sub")   # optional (pending invites)
+    email = user.get("email")
+    if not email:
+        raise FileError("client_users: 'email' is required")
+
+    email_lower = email.lower()
+
+    # Track uniqueness in-plan under BOTH identities, because either
+    # can be the one that trips a DB constraint later.
+    if google_sub:
+        if ("client_user_sub", google_sub) in plan.refs:
+            raise FileError(
+                f"client_users: duplicate google_sub '{google_sub}' "
+                f"in {source}"
+            )
+        plan.refs[("client_user_sub", google_sub)] = google_sub
+    if ("client_user_email", email_lower) in plan.refs:
         raise FileError(
-            f"client_users: duplicate google_sub '{google_sub}' in {source}"
+            f"client_users: duplicate email '{email}' in {source}"
         )
-    plan.refs[("client_user", google_sub)] = google_sub
+    plan.refs[("client_user_email", email_lower)] = email_lower
 
-    payload: dict[str, Any] = {"google_sub": google_sub}
+    payload: dict[str, Any] = {}
 
     for json_field, pg_col in spec.columns.items():
-        if json_field in user:
+        if json_field in user and user[json_field] is not None:
             payload[pg_col] = user[json_field]
-
-    if not payload.get("email"):
-        raise FileError(
-            f"client_users[{google_sub}]: 'email' is required"
-        )
 
     client_key = user.get("client_key")
     if client_key is not None:
         client_id = plan.refs.get(("client", client_key))
         if client_id is None:
             raise FileError(
-                f"client_users[{google_sub}] references unknown "
+                f"client_users[{email}] references unknown "
                 f"client_key: {client_key}"
             )
         payload["client_id"] = client_id
 
+    label = google_sub or email
     plan.add(PlanOp(
         spec=spec,
-        pk=google_sub,
+        pk=label,
         payload=payload,
-        logical_key=(google_sub,),
+        logical_key=(label,),
         source_path=source,
     ))
 

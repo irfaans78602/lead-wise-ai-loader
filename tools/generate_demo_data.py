@@ -11,6 +11,10 @@ import psycopg2
 from psycopg2.extras import execute_values, RealDictCursor
 from dotenv import load_dotenv
 
+# South Africa Standard Time (UTC+2, no daylight saving). A fixed offset is exact for
+# South Africa and avoids needing the tzdata package on Windows.
+SAST = timezone(timedelta(hours=2), "SAST")
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Generate demo data for LeadWise AI.")
@@ -26,11 +30,12 @@ def random_date(start_dt, end_dt):
 
 def get_business_hour_timestamp(start_dt, end_dt):
     """
-    Returns a random timestamp. 
-    95% between 7am and 7pm, 5% between 7pm and 7am.
+    Returns a random timestamp (UTC) built from South Africa time.
+    95% between 07:00 and 19:00 SAST, 5% between 19:00 and 07:00 SAST.
     """
     max_day = min(end_dt, datetime.now(timezone.utc))
-    day = random_date(start_dt, max_day).replace(hour=0, minute=0, second=0, microsecond=0)
+    # Pick the calendar day in SAST, then set the hour in SAST.
+    day = random_date(start_dt, max_day).astimezone(SAST).replace(hour=0, minute=0, second=0, microsecond=0)
     
     if random.random() < 0.95:
         hour = random.randint(7, 18)
@@ -40,7 +45,7 @@ def get_business_hour_timestamp(start_dt, end_dt):
     minute = random.randint(0, 59)
     second = random.randint(0, 59)
         
-    result = day.replace(hour=hour, minute=minute, second=second)
+    result = day.replace(hour=hour, minute=minute, second=second).astimezone(timezone.utc)
     
     if result > datetime.now(timezone.utc):
         result = datetime.now(timezone.utc) - timedelta(minutes=random.randint(1, 60))
@@ -76,11 +81,12 @@ def generate_data():
     random.seed(42)
 
     try:
-        start_dt = datetime.strptime(args.start_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        # --start-date / --end-date are South Africa calendar days (SAST).
+        start_dt = datetime.strptime(args.start_date, "%Y-%m-%d").replace(tzinfo=SAST)
         
         if args.end_date:
             end_dt = datetime.strptime(args.end_date, "%Y-%m-%d").replace(
-                hour=23, minute=59, second=59, tzinfo=timezone.utc
+                hour=23, minute=59, second=59, tzinfo=SAST
             )
         else:
             end_dt = datetime.now(timezone.utc)
@@ -88,7 +94,7 @@ def generate_data():
     except ValueError as e:
         raise ValueError(f"Invalid date format. Use YYYY-MM-DD. Error: {e}")
 
-    print(f"  Date Range:      {start_dt.strftime('%Y-%m-%d')} to {end_dt.strftime('%Y-%m-%d %H:%M')}")
+    print(f"  Date Range:      {start_dt.strftime('%Y-%m-%d')} to {end_dt.astimezone(SAST).strftime('%Y-%m-%d %H:%M')} (SAST)")
     print(f"  Random Seed:     42")
 
     print("\nConnecting to database...")

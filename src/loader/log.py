@@ -6,6 +6,10 @@ file. The file is the artifact; stdout is a short glance.
 Log path:
     {data_root}/logs/{client_slug}/{YYYY-MM-DD-HHMMSS}-{mode}.log
 
+All timestamps (file name, started/finished) are South Africa Standard
+Time (SAST, UTC+2, no daylight saving) and carry an explicit +02:00
+offset in the file body.
+
 Client slug resolution, in order:
   1. .client-slug next to the input JSON -- a one-line file whose
      contents are the slug. Use this when the folder name and the
@@ -23,8 +27,19 @@ strings, passwords, tokens) and large SVG blobs are written as
 
 import os
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+
+# South Africa Standard Time (UTC+2, no daylight saving). A fixed offset
+# is exact for South Africa and avoids needing the tzdata package on
+# Windows.
+SAST = timezone(timedelta(hours=2), "SAST")
+
+
+def _now() -> datetime:
+    """Current time in South Africa."""
+    return datetime.now(SAST)
 
 
 # Legacy clients/<slug>/ pattern, kept as a secondary fallback for
@@ -77,23 +92,23 @@ class RunLog:
     def __init__(self, data_root: str, input_path: str, mode: str):
         self.mode = mode
         slug = client_slug(data_root, input_path)
-        ts = datetime.now(timezone.utc).strftime("%Y-%m-%d-%H%M%S")
+        self._t0 = _now()
+        ts = self._t0.strftime("%Y-%m-%d-%H%M%S")
         log_dir = Path(data_root) / "logs" / slug
         log_dir.mkdir(parents=True, exist_ok=True)
         self.path = log_dir / f"{ts}-{mode}.log"
         self._fh = self.path.open("w", encoding="utf-8")
-        self._t0 = datetime.now(timezone.utc)
         self._footer_written = False
 
     def _elapsed(self) -> str:
-        delta = datetime.now(timezone.utc) - self._t0
+        delta = _now() - self._t0
         return f"[+{delta.total_seconds():.3f}s]"
 
     def header(self, *, input_path: str, database_url: str,
                schema_version: int | None,
                expected_schema_version: int | None,
                loader_version: str, file_sha256: str):
-        started = datetime.now(timezone.utc).isoformat(timespec="milliseconds")
+        started = _now().isoformat(timespec="milliseconds")
         db_clean = _redact_database_url(database_url)
         expected = ("unset" if expected_schema_version is None
                     else str(expected_schema_version))
@@ -183,8 +198,9 @@ class RunLog:
         if self._footer_written or self._fh.closed:
             return
         self._footer_written = True
-        finished = datetime.now(timezone.utc).isoformat(timespec="milliseconds")
-        delta = datetime.now(timezone.utc) - self._t0
+        now = _now()
+        finished = now.isoformat(timespec="milliseconds")
+        delta = now - self._t0
         self._fh.write(f"result:    {result}\n")
         self._fh.write(f"exit:      {exit_code}\n")
         self._fh.write(f"finished:  {finished}\n")
@@ -242,6 +258,10 @@ def _fmt_col(col: str, v) -> str:
 def _fmt(v) -> str:
     if v is None:
         return "NULL"
+    # Timestamps from the database come back as timezone-aware values
+    # (usually UTC). Show them in SAST so the diff matches the log clock.
+    if isinstance(v, datetime) and v.tzinfo is not None:
+        v = v.astimezone(SAST)
     s = str(v)
     if len(s) > 80:
         return s[:77] + "..."

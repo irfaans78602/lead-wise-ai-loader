@@ -216,7 +216,16 @@ def generate_data():
                 else:
                     target_ads.append(en_leaf)
 
-        conversation_types = ['abandoned'] * 750 + ['completed'] * 2250
+        TOTAL_CONVERSATIONS = 3000
+        NO_ANSWER_COUNT = round(TOTAL_CONVERSATIONS * 0.02)  # ~2% never answer anything (drop off at Q1)
+        ABANDONED_COUNT = 750 - NO_ANSWER_COUNT              # abandoned after answering >= 1 question
+        COMPLETED_COUNT = TOTAL_CONVERSATIONS - 750
+
+        conversation_types = (
+            ['abandoned_no_answer'] * NO_ANSWER_COUNT
+            + ['abandoned'] * ABANDONED_COUNT
+            + ['completed'] * COMPLETED_COUNT
+        )
         random.shuffle(conversation_types)
 
         print("\n[5/8] Generating in-memory data (3000 records)...")
@@ -245,6 +254,12 @@ def generate_data():
                 state = 'completed'
                 current_order = max(all_question_orders) + 1
                 completed_at = conv_created_at + timedelta(minutes=flow_duration_minutes)
+            elif conv_type == 'abandoned_no_answer':
+                # Left before answering anything: sits on the first question, so no answers are
+                # generated (q_order < current_order is never true) and the drop-off is Q1.
+                state = 'abandoned'
+                current_order = all_question_orders[0]
+                completed_at = None
             else:
                 state = 'abandoned'
                 current_order = random.choice(abandon_points)

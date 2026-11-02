@@ -10,6 +10,42 @@ from loader.entities import EntitySpec
 # Unversioned
 # ---------------------------------------------------------------------
 
+AGENCIES = EntitySpec(
+    name="agencies",
+    table="agencies",
+    pk_col="agency_id",
+    pk_kind="agency",
+    natural_key=("agency_id",),
+    columns={
+        "name": "name",
+        "email_to": "email_to",
+        "email_cc": "email_cc",
+        "email_bcc": "email_bcc",
+        "start_date": "start_date",
+        "end_date": "end_date",
+    },
+)
+
+
+# Keyed by lower(email), NOT google_sub. google_sub is NULL for pending invites
+# and is linked by the backend at first login, so the loader never writes it.
+AGENCY_USERS = EntitySpec(
+    name="agency_users",
+    table="agency_users",
+    pk_col="email",
+    pk_kind="agency_user",
+    natural_key=("email",),
+    columns={
+        "email": "email",
+        "display_name": "display_name",
+        "role": "role",
+        "deactivation_reason": "deactivation_reason",
+        "start_date": "start_date",
+        "end_date": "end_date",
+    },
+)
+
+
 CLIENTS = EntitySpec(
     name="clients",
     table="clients",
@@ -51,9 +87,9 @@ CLIENTS = EntitySpec(
 CLIENT_USERS = EntitySpec(
     name="client_users",
     table="client_users",
-    pk_col="google_sub",
+    pk_col="email",
     pk_kind="client_user",
-    natural_key=("google_sub",),
+    natural_key=("email",),
     columns={
         "client_key": "client_id",
         "email": "email",
@@ -256,6 +292,8 @@ LIVE_CHAT_LOGS = EntitySpec(
 ALL = {
     spec.name: spec
     for spec in (
+        AGENCIES,
+        AGENCY_USERS,
         CLIENTS,
         CLIENT_USERS,
         ADS,
@@ -269,4 +307,3 @@ ALL = {
         LIVE_CHAT_LOGS,
     )
 }
-

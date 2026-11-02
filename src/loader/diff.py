@@ -49,6 +49,9 @@ def _row_identity(op: PlanOp, row: dict):
                 f"{p.get('locale')}:{p.get('text_key')}:"
                 f"{p.get('start_date')}")
 
+    if spec.table in ("client_users", "agency_users"):
+        return str(row["email"]).lower()
+
     return str(row[spec.pk_col])
 
 
@@ -88,6 +91,14 @@ def _fetch_one(conn, op: PlanOp):
                 (p.get("client_id"), p.get("channel"),
                  p.get("locale"), p.get("text_key"),
                  p.get("start_date")),
+            )
+            return cur.fetchone()
+
+    if spec.table in ("client_users", "agency_users"):
+        with conn.cursor() as cur:
+            cur.execute(
+                f"SELECT * FROM {spec.table} WHERE lower(email) = lower(%s)",
+                (op.payload["email"],),
             )
             return cur.fetchone()
 

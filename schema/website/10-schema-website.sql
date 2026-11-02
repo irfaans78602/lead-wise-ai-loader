@@ -715,8 +715,8 @@ CREATE TABLE conversations (
     created_at                      TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at                      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-CREATE INDEX conversations_customer_idx ON conversations (customer_id, created_at DESC);
 CREATE INDEX conversations_state_idx    ON conversations (state);
+-- (customer_id, created_at DESC) INCLUDE (state, conversation_id): see idx_conversations_customer_cover in section 41
 CREATE INDEX conversations_language_idx ON conversations (language_id);
 
 -- =============================================================
@@ -733,8 +733,7 @@ CREATE TABLE answers (
     CHECK (answer_text IS NOT NULL OR answer_values IS NOT NULL),
     CHECK (answer_values IS NULL OR jsonb_typeof(answer_values) = 'array')
 );
-CREATE INDEX answers_conversation_idx ON answers (conversation_id);
-CREATE INDEX answers_faq_idx          ON answers (faq_id);
+-- conversation_id lookups use UNIQUE (conversation_id, faq_id); faq_id lookups use idx_answers_faq_created (section 41)
 
 -- =============================================================
 -- 22. Qualification Levels
@@ -958,7 +957,7 @@ CREATE TABLE live_chat_logs (
     status          TEXT NOT NULL DEFAULT 'success',
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-CREATE INDEX live_chat_logs_client_idx ON live_chat_logs (client_id, created_at DESC);
+-- (client_id, created_at DESC) INCLUDE (ad_id, status): see live_chat_logs_client_cover_idx in section 41
 CREATE INDEX live_chat_logs_ad_idx ON live_chat_logs (ad_id, created_at DESC);
 CREATE INDEX live_chat_logs_ip_idx ON live_chat_logs (ip_hash, created_at DESC) WHERE ip_hash IS NOT NULL;
 CREATE INDEX live_chat_logs_demo_session_idx ON live_chat_logs (demo_session_id) WHERE demo_session_id IS NOT NULL;
@@ -1155,29 +1154,40 @@ WHERE start_date <= sa_today()
 CREATE INDEX IF NOT EXISTS idx_ads_client_reuse
 ON ads (client_id, reuse_ad_id);
 
--- 2. Customers: Speeds up the main Funnel, Overview, and Trend queries
--- which filter by ad_id and a specific date range (created_at).
-CREATE INDEX IF NOT EXISTS idx_customers_ad_created
-ON customers (ad_id, created_at DESC);
+-- 2. Customers: covering index for the Funnel, Overview, Pipeline, Quality,
+-- Peak-hour and Trend queries. They filter by ad_id and a created_at range and
+-- only read status / qualification_id / demo_session_id, so they can run as
+-- index-only scans. (Demo mode filters on "demo_session_id IS NULL OR = ?",
+-- which cannot use a (ad_id, demo_session_id, created_at) index as a range,
+-- so the old idx_customers_ad_demo_created was dropped.)
+CREATE INDEX IF NOT EXISTS idx_customers_ad_created_cover
+ON customers (ad_id, created_at DESC)
+INCLUDE (customer_id, status, qualification_id, demo_session_id);
 
--- 3. Customers: Speeds up Demo mode fetching, which filters by ad_id,
--- demo_session_id, and date range.
-CREATE INDEX IF NOT EXISTS idx_customers_ad_demo_created
-ON customers (ad_id, demo_session_id, created_at DESC);
+-- 3. Conversations: covering index for the conversation-progress CTE
+-- (join on customer_id, then read state and created_at) and the lead-list
+-- LATERAL lookup. Replaces conversations_customer_idx and
+-- idx_conversations_customer_state.
+CREATE INDEX IF NOT EXISTS idx_conversations_customer_cover
+ON conversations (customer_id, created_at DESC)
+INCLUDE (state, conversation_id);
 
--- 4. Conversations: Speeds up the Funnel counts by state (completed/abandoned)
--- and the avg response time calculation.
-CREATE INDEX IF NOT EXISTS idx_conversations_customer_state
-ON conversations (customer_id, state);
-
--- 5. Answers: Crucial for the new Drop-off logic.
--- It finds the MAX question answered per conversation, filtered by date.
+-- 4. Answers: finds the MIN/MAX answer time per conversation (average
+-- response time) and the answers of each conversation, filtered by date.
 CREATE INDEX IF NOT EXISTS idx_answers_conversation_created
 ON answers (conversation_id, created_at DESC);
 
--- 6. Answers: Speeds up the join between answers and faqs for the drop-off logic
+-- 5. Answers: speeds up the join between answers and faqs
+-- (also serves the faq_id foreign key).
 CREATE INDEX IF NOT EXISTS idx_answers_faq_created
 ON answers (faq_id, created_at DESC);
+
+-- 6. Live chat logs: covering index for v_live_chat_funnel and
+-- v_live_chat_dropoff (group by client_id, ad_id, day, status), so they can
+-- run as index-only scans. Replaces live_chat_logs_client_idx.
+CREATE INDEX IF NOT EXISTS live_chat_logs_client_cover_idx
+ON live_chat_logs (client_id, created_at DESC)
+INCLUDE (ad_id, status);
 
 COMMIT;
 

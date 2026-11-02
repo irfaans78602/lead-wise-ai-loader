@@ -79,8 +79,10 @@ def _hint(op: PlanOp) -> str:
         # website: name, master: client_name, rag: display_name
         return (p.get("name") or p.get("client_name")
                 or p.get("display_name") or "")
-    if table == "client_users":
+    if table in ("client_users", "agency_users"):
         return p.get("email", "")
+    if table == "agencies":
+        return p.get("name", "")
     if table == "instances":
         return p.get("instance_type", "")
     if table == "client_subscriptions":
@@ -102,6 +104,8 @@ def _write_one(conn, op: PlanOp) -> str:
         return _upsert_pricing_discount(conn, op)
     if spec.pk_col == "client_text_key":
         return _upsert_client_text(conn, op)
+    if spec.table in ("client_users", "agency_users"):
+        return _upsert_user(conn, op)
     if spec.versioned:
         return _write_versioned(conn, op)
     return _upsert_by_pk(conn, op)
@@ -125,6 +129,28 @@ def _upsert_by_pk(conn, op: PlanOp) -> str:
         f"INSERT INTO {spec.table} ({', '.join(cols)}) "
         f"VALUES ({', '.join(['%s'] * len(cols))}) "
         f"ON CONFLICT ({spec.pk_col}) DO UPDATE SET {update_clause} "
+        f"RETURNING (xmax = 0) AS inserted"
+    )
+    with conn.cursor() as cur:
+        cur.execute(sql, values)
+        return "insert" if cur.fetchone()["inserted"] else "update"
+
+
+def _upsert_user(conn, op: PlanOp) -> str:
+    """
+    client_users / agency_users are unique on lower(email). google_sub is NULL
+    until first login, so it cannot be the conflict target. google_sub is never
+    in the payload, so a reload never clobbers a linked account.
+    """
+    cols = list(op.payload.keys())
+    values = [_serialize(op.payload[c]) for c in cols]
+    update_cols = [c for c in cols if c != "email"]
+    update_clause = ", ".join(f"{c} = EXCLUDED.{c}" for c in update_cols) \
+        or "email = EXCLUDED.email"
+    sql = (
+        f"INSERT INTO {op.spec.table} ({', '.join(cols)}) "
+        f"VALUES ({', '.join(['%s'] * len(cols))}) "
+        f"ON CONFLICT ((lower(email))) DO UPDATE SET {update_clause} "
         f"RETURNING (xmax = 0) AS inserted"
     )
     with conn.cursor() as cur:

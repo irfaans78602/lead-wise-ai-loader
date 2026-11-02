@@ -86,12 +86,22 @@ def load_plan(json_path: str, data_root: str) -> Plan:
     
     if isinstance(payload, dict) and "client_key" in payload and "settings" not in payload:
         payload = {"clients": [payload]}
+    elif isinstance(payload, dict) and "agency_key" in payload and "agencies" not in payload:
+        payload = {"agencies": [payload]}
 
     _plan_payload(payload, plan, source=str(Path(data_root) / json_path))
     return plan
 
 
 def _plan_payload(payload: dict, plan: Plan, source: str):
+    # Agencies first: clients.agency_id and agency_users.agency_id have
+    # foreign keys to agencies, and the writer follows plan order.
+    for agency in payload.get("agencies", []):
+        _plan_agency(agency, plan, source)
+
+    for user in payload.get("agency_users", []):
+        _plan_agency_user(user, plan, source)
+
     for client in payload.get("clients", []):
         _plan_client(client, plan, source)
 
@@ -130,6 +140,19 @@ def _plan_client(client: dict, plan: Plan, source: str):
     for json_field, pg_col in spec.columns.items():
         if json_field in client:
             payload[pg_col] = client[json_field]
+
+    # agency_key present -> link to that agency; absent or null -> NULL.
+    # agency_id is always in the payload, so a reload without agency_key
+    # detaches the client. The agency id is derived from the key, so an agency
+    # loaded by an earlier file (05-agency.json) resolves to the same UUID.
+    agency_key = client.get("agency_key")
+    if agency_key:
+        agency_id = plan.refs.get(("agency", agency_key))
+        if agency_id is None:
+            agency_id = derive("agency", agency_key)
+        payload["agency_id"] = agency_id
+    else:
+        payload["agency_id"] = None
 
     plan.add(PlanOp(
         spec=spec,
@@ -338,6 +361,13 @@ def _plan_client_user(user: dict, plan: Plan, source: str):
         raise FileError(
             f"client_users: duplicate email '{email}' in {source}"
         )
+    # Agencies are planned first, so an agency user with this email is
+    # already in plan.refs. The backend logs in client users first, so the
+    # same email in both tables would always resolve as a client.
+    if ("agency_user_email", email_lower) in plan.refs:
+        raise FileError(
+            f"client_users: '{email}' is also an agency user in {source}"
+        )
     plan.refs[("client_user_email", email_lower)] = email_lower
 
     payload: dict[str, Any] = {}
@@ -356,12 +386,107 @@ def _plan_client_user(user: dict, plan: Plan, source: str):
             )
         payload["client_id"] = client_id
 
+    # Keyed by email: google_sub is not written by the loader (see
+    # entities.CLIENT_USERS) and is NULL for pending invites.
     label = google_sub or email
     plan.add(PlanOp(
         spec=spec,
-        pk=label,
+        pk=email,
         payload=payload,
         logical_key=(label,),
+        source_path=source,
+    ))
+
+
+# ---------------------------------------------------------------------
+# Agencies
+# ---------------------------------------------------------------------
+
+def _resolve_agency_id(agency: dict, where: str = "agencies"):
+    explicit = agency.get("agency_id")
+    if explicit:
+        try:
+            return uuid.UUID(str(explicit))
+        except ValueError as e:
+            raise FileError(
+                f"{where}: agency_id {explicit!r} is not a valid UUID"
+            ) from e
+    return derive("agency", require(agency, "agency_key", where))
+
+
+def _plan_agency(agency: dict, plan: Plan, source: str):
+    spec = entities.AGENCIES
+    key = require(agency, "agency_key", "agencies")
+    agency_id = _resolve_agency_id(agency, f"agencies[{key}]")
+    plan.refs[("agency", key)] = agency_id
+
+    payload = {"agency_id": agency_id}
+    for json_field, pg_col in spec.columns.items():
+        if json_field in agency:
+            payload[pg_col] = agency[json_field]
+
+    # Optional hierarchy. The parent must appear earlier in the file.
+    parent_key = agency.get("parent_agency_key")
+    if parent_key:
+        parent_id = plan.refs.get(("agency", parent_key))
+        if parent_id is None:
+            raise FileError(
+                f"agencies[{key}] parent_agency_key '{parent_key}' "
+                f"must be listed before it"
+            )
+        payload["parent_agency_id"] = parent_id
+
+    plan.add(PlanOp(
+        spec=spec,
+        pk=agency_id,
+        payload=payload,
+        logical_key=(key,),
+        source_path=source,
+    ))
+
+    # Nested agency_users. The parent's key is authoritative.
+    for user in agency.get("agency_users", []):
+        _plan_agency_user({**user, "agency_key": key}, plan, source)
+
+
+def _plan_agency_user(user: dict, plan: Plan, source: str):
+    spec = entities.AGENCY_USERS
+    email = user.get("email")
+    if not email:
+        raise FileError("agency_users: 'email' is required")
+    email_lower = email.lower()
+
+    # The backend resolves a login by email in client_users first, then
+    # agency_users. The same email in both would log in as a client.
+    if ("client_user_email", email_lower) in plan.refs:
+        raise FileError(
+            f"agency_users: '{email}' is also a client user in {source}"
+        )
+    if ("agency_user_email", email_lower) in plan.refs:
+        raise FileError(
+            f"agency_users: duplicate email '{email}' in {source}"
+        )
+    plan.refs[("agency_user_email", email_lower)] = email_lower
+
+    payload: dict[str, Any] = {}
+    for json_field, pg_col in spec.columns.items():
+        if json_field in user and user[json_field] is not None:
+            payload[pg_col] = user[json_field]
+
+    agency_key = require(user, "agency_key", f"agency_users[{email}]")
+    agency_id = plan.refs.get(("agency", agency_key))
+    if agency_id is None:
+        raise FileError(
+            f"agency_users[{email}] references unknown "
+            f"agency_key: {agency_key}"
+        )
+    payload["agency_id"] = agency_id
+
+    plan.add(PlanOp(
+        spec=spec,
+        pk=email,
+        payload=payload,
+        logical_key=(email,),
         source_path=source,
     ))
 

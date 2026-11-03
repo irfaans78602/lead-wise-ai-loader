@@ -1,24 +1,51 @@
-# Python
-__pycache__/
-*.pyc
-*.pyo
+# Python Virtual Environment
+.venv
+venv/
+
+# Environment Variables (Secrets)
+.env
+.env.*
+# Allow example files so other devs know what vars are needed
+!.env.example
+
+# Local configuration files and harness keys
+*.local.txt
+.local.txt
+
+# CRITICAL: Contains production LINK_SIGNING_KEYS and real UUIDs
+tools/sign_ad_url.ps1
+tools/gen_pass.ps1
+
+# Python Cache and build output
+__pycache__
+*.py[cod]
 *.egg-info/
 build/
 dist/
-.venv/
 .pytest_cache/
 .mypy_cache/
 .coverage
 htmlcov/
-*.log
 
-# Per-profile env files (contain DB credentials)
-.env
-.env.*
-!.env.example
-
-# Data folder (client JSON contains live credentials: DB URLs, API keys)
+# Client data (JSON contains live credentials: DB URLs, API keys)
 data/
 
-# Run logs
+# Logs
 logs/
+*.log
+
+# IDE & Editor files
+.vscode/
+.idea/
+*.swp
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Generated files
+tree.txt
+check-encoding-tmp.js
+
+# Ignore the env sync script if you are managing it locally
+tools/sync_render_env.py
